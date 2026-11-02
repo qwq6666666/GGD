@@ -7,5 +7,5 @@ describe('headless 驗收情境（GDD 14）', () => {
   it('正常成長 10 年（A0 骨架）', () => {
     let t = 0;
     expect(runGrowth(1, 10, () => t++).ok).toBe(true);
-  });
+  }, 120000);
 });

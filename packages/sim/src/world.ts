@@ -1,77 +1,27 @@
 import { CALIBRATION } from '@ss/content';
 import type { Command, CommandResult } from '@ss/schema';
-import { isMonthEnd, isSeasonEnd, isWeekEnd, isYearEnd, toTick } from './calendar.js';
+import { toDate } from './calendar.js';
+import {
+  aiLeaderRespond, applyPendingPolicies, computeSupport, generateProposals, handleLeaderGone, mintAtSeasonStart, payLeaderSalary, seasonalElectionCheck,
+} from './civic.js';
+import { applyCommand } from './commands.js';
+import {
+  adjustWages, decideFallow, dailyConsumption, dailyEmergency, dailyWork, enterpriseLabor, equipTools, harvestSeason, monthlySpoilage, refreshCommutes, runMarket,
+  updateExpectedPrices, weeklyJobMatching, weeklyPayroll, weeklyRelief, winterFertility, householdStats,
+} from './econ.js';
+import { dailyEvents, forestGrowth, fuelMultiplier, monthlyMigration } from './events.js';
 import { canonicalize } from './hash.js';
-import { chance65536, seedPrng, type PrngState } from './prng.js';
+import { compactHistory, pushEvent } from './history.js';
+import { compactLedger, totalGoods, totalMoney } from './ledger.js';
+import { dailyDeaths, monthlyDemography, yearlyAging } from './npc.js';
+import { chance65536 } from './prng.js';
+import { dailyShipments, weeklyNodeRecovery } from './trade.js';
+import type { WorldState } from './types.js';
+import { NCOMM } from './types.js';
+import { formatDate } from './calendar.js';
 
-/** 模擬邏輯版本；規則改變時遞增，存檔與重播會比對（GDD 11.3）。 */
-export const SIM_VERSION = '0.1.0-a0';
-
-export type Importance = 0 | 1 | 2 | 3;
-
-/** 已提交的權威事件（GDD 9、附錄 A）。 */
-export interface SimEvent {
-  id: number;
-  tick: number;
-  type: string;
-  actorIds: number[];
-  causeIds: number[];
-  importance: Importance;
-  data: Record<string, number | string>;
-}
-
-/**
- * 權威世界狀態。必須是純 JSON（無 Map/Set/class/浮點數），以保證存檔與 hash 一致。
- * A0 只有骨架欄位；人口、經濟等於 A1/A2 依任務卡加入。
- */
-export interface WorldState {
-  id: string;
-  seed: number;
-  prng: PrngState;
-  /** 已完成的日數；下一次 step 處理第 tick 日。 */
-  tick: number;
-  /** 世界版本：每個被接受且改變世界結構的命令 +1（用於 expectedWorldVersion）。 */
-  version: number;
-  leadership: {
-    leaderId: number;
-    playerHouseholdId: number;
-    support: number;
-    termStartTick: number;
-    nextElectionTick: number;
-  };
-  env: {
-    /** 0=晴 1=雨（A0 佔位） */
-    weather: number;
-    rainDaysThisSeason: number;
-  };
-  nextEventId: number;
-  /** 等待處理的命令（依 issuedTick, commandId 排序後處理）。 */
-  pendingCommands: Command[];
-  eventLog: SimEvent[];
-}
-
-export function createWorld(seed: number): WorldState {
-  const s = CALIBRATION.start;
-  const tick = toTick(1, s.startSeason, s.startDayOfSeason);
-  return {
-    id: `world-${seed >>> 0}`,
-    seed: seed >>> 0,
-    prng: seedPrng(seed),
-    tick,
-    version: 0,
-    leadership: {
-      leaderId: 0,
-      playerHouseholdId: 0,
-      support: s.initialSupport,
-      termStartTick: tick,
-      nextElectionTick: -1,
-    },
-    env: { weather: 0, rainDaysThisSeason: 0 },
-    nextEventId: 1,
-    pendingCommands: [],
-    eventLog: [],
-  };
-}
+export { createWorld, SIM_VERSION } from './start.js';
+export type { WorldState, SimEvent } from './types.js';
 
 export function submitCommand(world: WorldState, command: Command): void {
   world.pendingCommands.push(command);
@@ -81,28 +31,6 @@ function compareCommands(a: Command, b: Command): number {
   return a.issuedTick - b.issuedTick || a.commandId - b.commandId;
 }
 
-function recordEvent(world: WorldState, e: Omit<SimEvent, 'id' | 'tick'>): SimEvent {
-  const ev: SimEvent = { id: world.nextEventId++, tick: world.tick, ...e };
-  world.eventLog.push(ev);
-  return ev;
-}
-
-function applyCommand(world: WorldState, cmd: Command): CommandResult {
-  // 命令必須在 issuedTick 當日套用，否則重播時套用日會不同，破壞決定性。
-  if (cmd.issuedTick < world.tick) {
-    return { commandId: cmd.commandId, status: 'rejected', reason: 'late_command' };
-  }
-  if (cmd.expectedWorldVersion !== world.version) {
-    return { commandId: cmd.commandId, status: 'rejected', reason: 'stale_world_version' };
-  }
-  switch (cmd.type) {
-    case 'Noop':
-      return { commandId: cmd.commandId, status: 'accepted' };
-    default:
-      return { commandId: cmd.commandId, status: 'rejected', reason: 'not_implemented' };
-  }
-}
-
 /** 步驟 1：接收並排序玩家命令，校驗後套用。尚未到 issuedTick 的命令留到之後；過期命令拒絕。 */
 function phaseCommands(world: WorldState): CommandResult[] {
   const due: Command[] = [];
@@ -110,38 +38,55 @@ function phaseCommands(world: WorldState): CommandResult[] {
   for (const c of world.pendingCommands) (c.issuedTick <= world.tick ? due : later).push(c);
   due.sort(compareCommands);
   world.pendingCommands = later;
-  return due.map((c) => applyCommand(world, c));
+  return due.map((cmd) => {
+    // 命令必須在 issuedTick 當日套用，否則重播時套用日會不同，破壞決定性。
+    if (cmd.issuedTick < world.tick) return { commandId: cmd.commandId, status: 'rejected', reason: 'late_command' } as CommandResult;
+    if (cmd.expectedWorldVersion !== world.version) return { commandId: cmd.commandId, status: 'rejected', reason: 'stale_world_version' } as CommandResult;
+    return applyCommand(world, cmd);
+  });
 }
 
-/** 步驟 2：環境與日曆更新（A0 佔位：天氣）。 */
-function phaseEnvironment(world: WorldState): void {
-  const rain = chance65536(world.prng, CALIBRATION.weather.rainChance65536);
-  world.env.weather = rain ? 1 : 0;
-  if (rain) world.env.rainDaysThisSeason++;
+function seasonSummaryText(w: WorldState): string {
+  const d = toDate(w.tick);
+  const names = ['春', '夏', '秋', '冬'];
+  const S = w.settlement;
+  const st = householdStats(w);
+  const prices = ['糧', '木', '石', '工具', '家具'].map((n, i) => `${n}${S.prices[i]}`).join(' ');
+  return `第${d.year}年${names[d.season]}季結束：收成 ${S.harvestFood}，人口 ${w.npcs.length}，支持度 ${w.leadership.support}，全村存糧約 ${st.foodDays} 日，物價 ${prices}`;
 }
 
-/** 步驟 6：週期觸發。 */
-function phasePeriodic(world: WorldState): void {
-  const t = world.tick;
-  if (isWeekEnd(t)) {
-    // 每週市場與 NPC 計畫（A2）
+function weekly(w: WorldState): void {
+  runMarket(w);
+  weeklyPayroll(w);
+  enterpriseLabor(w);
+  refreshCommutes(w);
+  weeklyJobMatching(w);
+  adjustWages(w);
+  weeklyRelief(w);
+  weeklyNodeRecovery(w);
+  generateProposals(w);
+  if (w.leadership.mode === 1) aiLeaderRespond(w);
+  for (const e of w.enterprises) {
+    e.revenueWeek = 0;
+    e.costWeek = 0;
   }
-  if (isMonthEnd(t)) {
-    // 每月工資與遷徙（A2）
-  }
-  if (isSeasonEnd(t)) {
-    recordEvent(world, {
-      type: 'SeasonEnded',
-      actorIds: [],
-      causeIds: [],
-      importance: 1,
-      data: { rainDays: world.env.rainDaysThisSeason },
-    });
-    world.env.rainDaysThisSeason = 0;
-  }
-  if (isYearEnd(t)) {
-    // 每年年齡與快照（B1）
-  }
+  for (const h of w.households) h.incomeWeek = 0;
+}
+
+function seasonEnd(w: WorldState): void {
+  const d = toDate(w.tick);
+  harvestSeason(w);
+  forestGrowth(w);
+  if (d.season === 3) winterFertility(w);
+  updateExpectedPrices(w);
+  computeSupport(w);
+  seasonalElectionCheck(w);
+  const text = seasonSummaryText(w);
+  w.seasonSummary.push({ tick: w.tick, text });
+  pushEvent(w, { type: 'SeasonEnded', importance: 1, causeIds: [], actorIds: [], summary: text, data: { rainDays: w.env.rainDaysThisSeason, harvest: w.settlement.harvestFood, support: w.leadership.support } });
+  w.env.rainDaysThisSeason = 0;
+  w.settlement.harvestFood = 0;
+  w.settlement.reliefFoodSeason = 0;
 }
 
 export interface StepResult {
@@ -156,15 +101,47 @@ export interface StepOptions {
 
 /** 推進一日。依 GDD 3.1 的固定順序處理。會就地修改 world。 */
 export function step(world: WorldState, opts: StepOptions = {}): StepResult {
-  const commandResults = phaseCommands(world); // 1
-  phaseEnvironment(world); // 2
-  // 3 每日需求與緊急行為（A1）
-  // 4 移動、生產與施工（A1/A2）
-  // 5 消費與帳務（A2）
-  phasePeriodic(world); // 6
-  const tick = world.tick;
-  world.tick++;
-  if (opts.checkInvariants) checkInvariants(world); // 7
+  const w = world;
+  const commandResults = phaseCommands(w); // 1
+  const date = toDate(w.tick);
+  // 2 環境與日曆
+  if (date.dayOfSeason === 1) {
+    applyPendingPolicies(w);
+    mintAtSeasonStart(w);
+    equipTools(w);
+    decideFallow(w);
+  }
+  w.env.weather = chance65536(w.prng, CALIBRATION.weather.rainChance65536) ? 1 : 0;
+  if (w.env.weather) w.env.rainDaysThisSeason++;
+  dailyEvents(w);
+  // 3 每日需求與緊急行為
+  refreshCommutes(w);
+  dailyEmergency(w);
+  // 4 生產與施工、在途貨物
+  dailyWork(w);
+  dailyShipments(w);
+  // 5 消費與帳務
+  const { starved } = dailyConsumption(w, fuelMultiplier(w));
+  dailyDeaths(w, starved);
+  handleLeaderGone(w);
+  // 6 週期觸發
+  if (date.dayOfWeek === CALIBRATION.calendar.daysPerWeek) weekly(w);
+  if (date.dayOfMonth === CALIBRATION.calendar.daysPerMonth) {
+    payLeaderSalary(w);
+    monthlySpoilage(w);
+    monthlyDemography(w);
+    monthlyMigration(w);
+  }
+  if (date.dayOfSeason === CALIBRATION.calendar.daysPerSeason) seasonEnd(w);
+  if (date.dayOfYear === CALIBRATION.calendar.daysPerYear) {
+    yearlyAging(w);
+    handleLeaderGone(w);
+    compactLedger(w, date.year);
+    compactHistory(w, w.tick);
+  }
+  const tick = w.tick;
+  w.tick++;
+  if (opts.checkInvariants) checkInvariants(w); // 7
   return { tick, commandResults };
 }
 
@@ -176,14 +153,41 @@ export function runDays(world: WorldState, days: number, opts: StepOptions = {})
 
 export class InvariantError extends Error {}
 
-export function checkInvariants(world: WorldState): void {
-  canonicalize(world); // 只含整數與純物件
-  for (const v of world.prng) {
-    if (v < 0 || v > 0xffffffff) throw new InvariantError('prng state out of range');
+/** 守恆與一致性檢查（GDD 7.9、14）。 */
+export function checkInvariants(w: WorldState, deep = w.tick % 30 === 0): void {
+  if (deep) canonicalize(w); // 只含整數與純物件（較耗時，每 30 日一次）
+  for (const v of w.prng) if (v < 0 || v > 0xffffffff) throw new InvariantError('prng state out of range');
+  for (let i = 1; i < w.eventLog.length; i++) {
+    if (w.eventLog[i]!.id <= w.eventLog[i - 1]!.id) throw new InvariantError('event log out of order');
   }
-  for (let i = 1; i < world.eventLog.length; i++) {
-    const prev = world.eventLog[i - 1]!;
-    const cur = world.eventLog[i]!;
-    if (cur.id <= prev.id || cur.tick < prev.tick) throw new InvariantError('event log out of order');
+  const money = totalMoney(w);
+  if (money !== w.settlement.moneySupply) throw new InvariantError(`money not conserved: ${money} vs ${w.settlement.moneySupply} (${formatDate(w.tick)})`);
+  const goods = totalGoods(w);
+  const st = w.stats;
+  for (let c = 0; c < NCOMM; c++) {
+    const expect = w.settlement.initialGoods[c]! + st.produced[c]! - st.consumed[c]! - st.spoiled[c]! + st.imported[c]! - st.exported[c]!;
+    if (goods[c] !== expect) throw new InvariantError(`goods ${c} not conserved: ${goods[c]} vs ${expect} (${formatDate(w.tick)})`);
+  }
+  const hold = [w.settlement.public, ...w.households, ...w.enterprises];
+  for (const h of hold) {
+    if (h.cash < 0) throw new InvariantError('negative cash');
+    for (let c = 0; c < NCOMM; c++) if (h.stock[c]! < 0) throw new InvariantError('negative stock');
+  }
+  const seen: number[] = [];
+  for (const n of w.npcs) {
+    if (seen.includes(n.id)) throw new InvariantError('duplicate npc');
+    seen.push(n.id);
+    if (n.jobKind === 1) {
+      const e = w.enterprises.find((x) => x.id === n.jobId);
+      if (!e || !e.employeeIds.includes(n.id)) throw new InvariantError(`npc ${n.id} job mismatch`);
+    }
+  }
+  for (const e of w.enterprises) for (const id of e.employeeIds) {
+    const n = w.npcs.find((x) => x.id === id);
+    if (!n || n.jobKind !== 1 || n.jobId !== e.id) throw new InvariantError(`enterprise ${e.id} employee ${id} mismatch`);
+  }
+  for (const h of w.households) for (const id of h.memberIds) {
+    const n = w.npcs.find((x) => x.id === id);
+    if (!n || n.householdId !== h.id) throw new InvariantError(`household ${h.id} member ${id} mismatch`);
   }
 }

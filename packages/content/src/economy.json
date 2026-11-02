@@ -1,0 +1,241 @@
+{
+  "$comment": "經濟與 NPC 數值（GDD 7、18）。calibrated:false 皆為待校準，只能經 headless 模擬或 playtest 調整。定點數 FX=1000。商品索引：0糧食 1木材 2石材 3工具 4家具。",
+  "calibrated": false,
+  "basePrice": [
+    10,
+    8,
+    12,
+    120,
+    150
+  ],
+  "price": {
+    "minFx": 500,
+    "maxFx": 2500,
+    "stepPermille": 100,
+    "weeklyMaxPermille": 100
+  },
+  "marginalCoefFx": [
+    1000,
+    850,
+    700,
+    500,
+    300
+  ],
+  "laborEff": {
+    "baseFx": 600,
+    "perSkillFx": 6
+  },
+  "noToolCoefFx": 900,
+  "commute": {
+    "kPerCost": 3,
+    "minFx": 400
+  },
+  "farm": {
+    "perPersonSeason": 750,
+    "workDaysPerSeason": 75,
+    "seasonFx": [
+      1000,
+      1000,
+      1000,
+      0
+    ],
+    "maxWorkers": 5
+  },
+  "lumber": {
+    "perDay": 6,
+    "maxWorkers": 5,
+    "radius": 12
+  },
+  "quarry": {
+    "perDay": 4,
+    "maxWorkers": 4,
+    "radius": 8
+  },
+  "toolshop": {
+    "batchPD": 3,
+    "batchOut": 2,
+    "inWood": 4,
+    "inStone": 2,
+    "maxWorkers": 3
+  },
+  "furnshop": {
+    "batchPD": 2,
+    "batchOut": 1,
+    "inWood": 4,
+    "maxWorkers": 3
+  },
+  "foodPerPersonDay": 1,
+  "fuelPerHouseholdDay": 1,
+  "spoilFoodPermillePerMonth": 10,
+  "fertility": {
+    "harvestLoss": 2,
+    "winterGain": 4,
+    "fallowGain": 6,
+    "max": 100
+  },
+  "forest": {
+    "k": 1000,
+    "rPermille": 20,
+    "regenPermilleOfK": 2,
+    "perWood": 4
+  },
+  "wage": {
+    "min": 20,
+    "start": [
+      30,
+      30,
+      30,
+      32,
+      32,
+      30
+    ],
+    "weeklyMaxPermille": 50
+  },
+  "tax": {
+    "harvestPermille": 100,
+    "commercePermille": 60,
+    "harvestMaxPermille": 200
+  },
+  "relief": {
+    "triggerDays": 7,
+    "topUpDays": 14,
+    "reservePermille": 200,
+    "reserveDays": 15,
+    "buyMaxPriceFx": 1300
+  },
+  "household": {
+    "safetyDays": 30,
+    "arbitrageMaxExtraDays": 20,
+    "furnitureWealthStep": 300,
+    "furnitureMax": 8
+  },
+  "start": {
+    "cashHousehold": 1500,
+    "cashFarm": 2500,
+    "cashWorkshop": 3000,
+    "cashPublic": 3000,
+    "publicStock": [
+      300,
+      120,
+      60,
+      0,
+      0
+    ],
+    "householdStock": [
+      120,
+      20,
+      0,
+      0,
+      0
+    ],
+    "toolsPerEnterprise": [
+      4,
+      3,
+      2,
+      2,
+      2
+    ],
+    "farmAccumFx": 118000
+  },
+  "road": {
+    "dirtWood": 1,
+    "dirtPersonDays": 1,
+    "proposalCommuteCost": 70
+  },
+  "build": {
+    "home": {
+      "w": 2,
+      "h": 2,
+      "wood": 30,
+      "stone": 5,
+      "personDays": 40
+    },
+    "field": {
+      "w": 4,
+      "h": 3,
+      "wood": 35,
+      "stone": 0,
+      "personDays": 60
+    },
+    "lumber": {
+      "w": 2,
+      "h": 2,
+      "wood": 10,
+      "stone": 0,
+      "personDays": 12
+    },
+    "quarry": {
+      "w": 2,
+      "h": 2,
+      "wood": 10,
+      "stone": 0,
+      "personDays": 12
+    },
+    "toolshop": {
+      "w": 3,
+      "h": 2,
+      "wood": 25,
+      "stone": 10,
+      "personDays": 30
+    },
+    "furnshop": {
+      "w": 3,
+      "h": 2,
+      "wood": 25,
+      "stone": 5,
+      "personDays": 30
+    },
+    "market": {
+      "w": 3,
+      "h": 2,
+      "wood": 20,
+      "stone": 5,
+      "personDays": 25
+    },
+    "storage": {
+      "w": 2,
+      "h": 2,
+      "wood": 20,
+      "stone": 0,
+      "personDays": 20
+    }
+  },
+  "npc": {
+    "inertia": 120,
+    "cooldownWeeks": 4,
+    "switchCost": 100,
+    "wageRef": 40,
+    "weights": {
+      "income": 300,
+      "family": 200,
+      "skill": 200,
+      "stability": 150,
+      "preference": 150
+    },
+    "commutePenaltyPerCost": 2,
+    "leisureBase": 380,
+    "sectorRisk": [
+      250,
+      450,
+      400,
+      300,
+      300,
+      350
+    ]
+  },
+  "stockCap": [
+    99999,
+    800,
+    300,
+    100,
+    80
+  ],
+  "forage": {
+    "foodPerDayBySeason": [
+      1,
+      2,
+      2,
+      1
+    ]
+  }
+}

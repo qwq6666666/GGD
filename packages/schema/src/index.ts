@@ -24,6 +24,9 @@ export const COMMAND_TYPES = [
   'FollowEntity',
   'SetPersonalChoice',
   'NominateHeir',
+  'StandForElection',
+  'SwitchFamily',
+  'OrderImport',
 ] as const;
 
 export const GenericCommandSchema = CommandBaseSchema.extend({

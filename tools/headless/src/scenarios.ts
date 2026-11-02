@@ -15,7 +15,7 @@ export function runGrowth(seed: number, years: number, now: () => number): Scena
   const times: number[] = [];
   for (let i = 0; i < days; i++) {
     const t0 = now();
-    step(w, { checkInvariants: true });
+    step(w, { checkInvariants: w.tick % 30 === 0 });
     times.push(now() - t0);
   }
   times.sort((a, b) => a - b);

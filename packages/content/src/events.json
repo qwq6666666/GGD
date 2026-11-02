@@ -1,0 +1,21 @@
+{
+  "$comment": "事件模板（GDD 8.3）。calibrated:false 皆待校準。重大事件每年最多 1 件、中等事件每季最多 2 件。",
+  "calibrated": false,
+  "majorPerYearMax": 1,
+  "mediumPerSeasonMax": 2,
+  "dailyMajorChancePermille": 5,
+  "dailyMediumChancePermille": 20,
+  "templates": [
+    { "type": "drought", "tier": "major", "weight": 3, "seasons": [0, 1], "warningDays": 20, "durationDays": 90, "yieldPermille": 600, "cooldownDays": 1080, "recovery": "公共救濟、向貿易節點採購、農業補助", "visibility": 3 },
+    { "type": "flood", "tier": "major", "weight": 2, "seasons": [0, 1], "warningDays": 10, "durationDays": 1, "roadLossPermille": 400, "cooldownDays": 1080, "recovery": "重新修築被沖毀的道路", "visibility": 3 },
+    { "type": "forest_fire", "tier": "major", "weight": 1, "seasons": [1, 2], "warningDays": 5, "durationDays": 1, "radius": 5, "cooldownDays": 1440, "recovery": "公共植林、保育區", "visibility": 3 },
+    { "type": "pests", "tier": "medium", "weight": 3, "seasons": [1], "warningDays": 7, "durationDays": 1, "fertilityLoss": 6, "cooldownDays": 360, "recovery": "輪作與冬季休養", "visibility": 2 },
+    { "type": "epidemic", "tier": "medium", "weight": 2, "seasons": [2, 3], "warningDays": 7, "durationDays": 20, "victims": 3, "cooldownDays": 540, "recovery": "休養；診所可縮短病程", "visibility": 2 },
+    { "type": "fire", "tier": "medium", "weight": 2, "seasons": [2, 3], "warningDays": 0, "durationDays": 15, "stockLossPermille": 500, "cooldownDays": 540, "recovery": "等待復工、由業主週轉", "visibility": 2 },
+    { "type": "bumper_harvest", "tier": "medium", "weight": 3, "seasons": [1, 2], "warningDays": 0, "durationDays": 90, "yieldPermille": 1200, "cooldownDays": 540, "recovery": "盈餘可儲存或出口", "visibility": 2 },
+    { "type": "trade_boom", "tier": "medium", "weight": 2, "seasons": [0, 1, 2, 3], "warningDays": 0, "durationDays": 60, "driftPermille": 200, "cooldownDays": 360, "recovery": "價格自然回歸", "visibility": 1 },
+    { "type": "festival", "tier": "medium", "weight": 3, "seasons": [2], "warningDays": 0, "durationDays": 1, "moodGain": 10, "cooldownDays": 360, "recovery": "無", "visibility": 2 },
+    { "type": "cold_snap", "tier": "medium", "weight": 3, "seasons": [3], "warningDays": 5, "durationDays": 20, "fuelMultiplier": 2, "cooldownDays": 540, "recovery": "多備木材、公共補助燃料", "visibility": 2 },
+    { "type": "migration_wave", "tier": "medium", "weight": 2, "seasons": [0, 1, 2], "warningDays": 0, "durationDays": 1, "cooldownDays": 360, "recovery": "無", "visibility": 1 }
+  ]
+}

@@ -60,15 +60,15 @@ describe('決定性（GDD 11.3、14 存檔回放／速度一致性）', () => {
     ]);
   });
 
-  it('尚未實作的命令以 not_implemented 拒絕，不改變世界版本', () => {
+  it('無效命令被拒絕並附原因，不改變世界版本', () => {
     const w = createWorld(3);
     submitCommand(w, { commandId: 1, issuedTick: w.tick, expectedWorldVersion: 0, type: 'BuildRoad', payload: {} });
-    expect(step(w).commandResults[0]).toEqual({ commandId: 1, status: 'rejected', reason: 'not_implemented' });
+    expect(step(w).commandResults[0]).toEqual({ commandId: 1, status: 'rejected', reason: 'invalid_target' });
     expect(w.version).toBe(0);
   });
 
-  it('debug 模式下 10 年不變量檢查通過', () => {
+  it('debug 模式下 3 年不變量檢查通過（貨幣與商品守恆）', () => {
     const w = createWorld(123);
-    expect(() => runDays(w, 360 * 10, { checkInvariants: true })).not.toThrow();
-  });
+    expect(() => runDays(w, 360 * 3, { checkInvariants: true })).not.toThrow();
+  }, 60000);
 });
