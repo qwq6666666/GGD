@@ -240,7 +240,7 @@ export function immigrate(w: WorldState, forced: boolean): boolean {
   const surname = NAMES.surnames[(hid * 5) % NAMES.surnames.length]!;
   const hh: Household = {
     id: hid, name: surname + '家', memberIds: [], cash: 400, stock: [60, 20, 0, 0, 0], homeId: home, kind: 0, reciprocity: [],
-    safetyDays: ECON.household.safetyDays, trustLeader: 50, incomeWeek: 0, shortWeeks: 0, famineTick: -1000,
+    safetyDays: ECON.household.safetyDays, trustLeader: 50, incomeWeek: 0, shortWeeks: 0, famineTick: -1000, practices: 0,
   };
   w.households.push(hh);
   // 移入視為貿易順差：貨幣與商品記為明示的外部流入（GDD 7.5、7.9）

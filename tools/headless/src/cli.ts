@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks';
-import { runGrowth, runReplay, runSpeed, type ScenarioReport } from './scenarios.js';
+import { runGrowth, runNpcStress, runReplay, runSpeed, runStress, type ScenarioReport } from './scenarios.js';
+import { runBatch } from './batch.js';
 
 function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -15,9 +16,19 @@ const all: Record<string, () => ScenarioReport> = {
   growth: () => runGrowth(seed, years, now),
   replay: () => runReplay(seed),
   speed: () => runSpeed(seed),
+  stress: () => runStress(seed, Number(arg('stress-years', '100')), now),
+  'npc-stress': () => runNpcStress(Number(arg('npcs', '300')), now),
+  report: () => {
+    const rows = runBatch(Number(arg('seeds', '6')), years, arg('bot', 'auto') === 'auto');
+    return {
+      name: `report-${years}y`,
+      ok: rows.every((r) => !r.extinct),
+      lines: rows.map((r) => `seed ${r.seed} pops/5y ${r.pops.join(',')} unemp% ${r.unemployedPct} minFoodDays ${r.minFoodDays} deaths ${r.deaths} fields ${r.fields}`),
+    };
+  },
 };
 
-const selected = scenario === 'all' ? Object.keys(all) : [scenario];
+const selected = scenario === 'all' ? ['growth', 'replay', 'speed', 'stress'] : [scenario];
 let failed = false;
 for (const name of selected) {
   const fn = all[name];

@@ -1,5 +1,6 @@
 import { ECON } from '@ss/content';
 import { marginalValue, releaseJob } from './econ.js';
+import { nextInt } from './prng.js';
 import { pushBio, pushEvent } from './history.js';
 import { inBounds, tileIdx, validatePlacement } from './map.js';
 import { transferGoods, transferMoney } from './ledger.js';
@@ -98,6 +99,33 @@ export function foundEnterprises(w: WorldState): void {
     transferMoney(w, 'h' + cand.id, 'e' + e.id, Math.min(800, Math.floor(cand.cash / 2)), 'capital');
     z.founded = 1;
     pushEvent(w, { type: 'EnterpriseFounded', importance: 2, causeIds: [], actorIds: [], summary: `${cand.name}在商業用地開設${KIND_LABEL[kind]}`, data: { enterpriseId: e.id, householdId: cand.id } });
+  }
+}
+
+// ---------- 創新擴散（GDD 5.5） ----------
+
+/** 每週：新做法（輪作）的採用機率 = 基礎值 + 已採用親友比例 × 擴散係數，不會全村同時採用。 */
+export function weeklyDiffusion(w: WorldState): void {
+  for (const h of w.households) {
+    if (h.memberIds.length === 0 || (h.practices & 1) !== 0) continue;
+    const owns = w.enterprises.some((e) => e.kind === 'farm' && e.ownerHouseholdId === h.id);
+    if (!owns) continue;
+    const friends: number[] = [];
+    for (const id of h.memberIds) {
+      const n = npcOf(w, id);
+      if (!n) continue;
+      for (const r of n.relations) {
+        const o = npcOf(w, r.targetId);
+        if (o && o.householdId !== h.id && !friends.includes(o.householdId)) friends.push(o.householdId);
+      }
+    }
+    friends.sort((a, b) => a - b);
+    const adopted = friends.filter((f) => ((hhOf(w, f)?.practices ?? 0) & 1) !== 0).length;
+    const p = ECON.diffusion.basePermille + (friends.length ? Math.floor((adopted * ECON.diffusion.perFriendRatioPermille) / friends.length) : 0);
+    if (nextInt(w.prng, 1000) < p) {
+      h.practices |= 1;
+      pushEvent(w, { type: 'PracticeAdopted', importance: 2, causeIds: [], actorIds: [], summary: `${h.name}開始採用輪作（${adopted}/${friends.length} 位親友已採用）`, data: { householdId: h.id, adopted, friends: friends.length } });
+    }
   }
 }
 

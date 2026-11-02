@@ -5,7 +5,7 @@ import { nextInt, seedPrng } from './prng.js';
 import type { Building, BuildingType, EntKind, Enterprise, Household, Npc, WorldState } from './types.js';
 import { zeroStock } from './types.js';
 
-export const SIM_VERSION = '0.2.0-a1';
+export const SIM_VERSION = '1.0.0-c1';
 
 interface HhPlan {
   name: string;
@@ -281,6 +281,7 @@ export function createWorld(seed: number, family = 0): WorldState {
       incomeWeek: 0,
       shortWeeks: 0,
       famineTick: -1000,
+      practices: 0,
     };
     w.households.push(hh);
     const members: Npc[] = [];
@@ -290,6 +291,14 @@ export function createWorld(seed: number, family = 0): WorldState {
     for (const m of members) {
       hh.memberIds.push(m.id);
       w.npcs.push(m);
+    }
+    // 家庭內的成年夫妻：前兩位成年人為一對（出生才有穩定來源）
+    const adultsOf = members.filter((m) => m.age >= 16 && m.age <= 55);
+    if (adultsOf.length >= 2 && Math.abs(adultsOf[0]!.age - adultsOf[1]!.age) <= 15) {
+      adultsOf[0]!.sex = 0;
+      adultsOf[1]!.sex = 1;
+      adultsOf[0]!.spouseId = adultsOf[1]!.id;
+      adultsOf[1]!.spouseId = adultsOf[0]!.id;
     }
     // 家庭內親屬關係
     for (const a of members) for (const b of members) if (a.id !== b.id) a.relations.push({ targetId: b.id, type: 0, trust: 80, lastInteraction: tick });

@@ -51,3 +51,39 @@ describe('存檔（GDD 12、14 存檔回放）', () => {
     expect(await store.list('main')).toEqual(['4', '3', '2']);
   });
 });
+
+import { checksumOf } from '../src/index.js';
+
+describe('存檔遷移（schema v1 → v2）', () => {
+  const v1 = (tick: number): string => {
+    const body = { format: 'shengsheng-save', schemaVersion: 1, simVersion: '0.1.0-a0', worldVersion: 0, seed: 42, tick, state: { id: 'world-42', tick, version: 0, eventLog: [] }, commandLog: [] };
+    return JSON.stringify({ ...body, checksum: checksumOf(body) });
+  };
+
+  it('A0 骨架存檔可遷移：同 seed 重建、日期相同、檢查碼有效、可繼續模擬', () => {
+    const { world, save, warnings } = parseSave(v1(59 + 90));
+    expect(save.schemaVersion).toBe(2);
+    expect(world.tick).toBe(59 + 90);
+    expect(world.seed).toBe(42);
+    expect(world.npcs.length).toBeGreaterThan(0);
+    expect(warnings.some((w) => w.includes('遷移'))).toBe(true);
+    runDays(world, 30, { checkInvariants: true });
+    // 遷移後再存再讀 hash 一致
+    const again = parseSave(serializeSave(createSave(world, [])));
+    expect(stateHash(again.world)).toBe(stateHash(world));
+  });
+
+  it('遷移前就先驗證檢查碼：被竄改的舊存檔被拒絕', () => {
+    const text = v1(100).replace('"tick":100', '"tick":101');
+    expect(() => parseSave(text)).toThrow(SaveError);
+  });
+
+  it('規則版本不同時給出警告而不是失敗', () => {
+    const w = createWorld(3);
+    const s = createSave(w, []);
+    const body = { ...s, simVersion: '0.0.1' } as Record<string, unknown>;
+    delete body.checksum;
+    const text = JSON.stringify({ ...body, checksum: checksumOf(body) });
+    expect(parseSave(text).warnings.some((x) => x.includes('規則版本'))).toBe(true);
+  });
+});

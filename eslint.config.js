@@ -47,6 +47,10 @@ export default tseslint.config(
     },
   },
   {
+    files: ['tools/e2e/**/*.mjs'],
+    languageOptions: { globals: { process: 'readonly', setTimeout: 'readonly', fetch: 'readonly', console: 'readonly', document: 'readonly', window: 'readonly' } },
+  },
+  {
     files: ['packages/sim/src/**/*.ts'],
     rules: determinismRules,
   },

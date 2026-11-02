@@ -7,7 +7,9 @@
 - `pnpm install` — 安裝（會設定 `.githooks` 為 git hooks）
 - `pnpm lint` / `pnpm typecheck` / `pnpm test`
 - `pnpm headless --scenario all --years 10` — 無畫面驗收（growth、replay、speed）
-- `pnpm dev` / `pnpm build` — Web 殼
+- `pnpm headless --scenario stress|npc-stress|report` — 100 年壓測／300 人壓力／多種子平衡報表
+- `pnpm dev` / `pnpm build` — 遊戲（Phaser 地圖＋DOM 面板）
+- `pnpm e2e` — 真瀏覽器冒煙（需先 build 與 Chromium）
 - `pnpm verify` — 合併前完整檢查
 
 ## 模組邊界（GDD 11.1）
@@ -18,7 +20,7 @@
 | `packages/content` | 所有「待校準」數值與權重表（JSON） | — |
 | `packages/persistence` | 存檔序列化、checksum、schema 遷移 | sim, schema |
 | `tools/headless` | 批次模擬、驗收情境、平衡報表 | sim, persistence |
-| `apps/web` | Worker＋DOM 面板（A3 起加 Phaser） | 全部 |
+| `apps/web` | Worker＋Phaser 地圖＋DOM 面板 | 全部 |
 
 ## 決定性規則（GDD 11.3，ESLint 於 `packages/sim` 強制）
 - 禁用 `Math.random/exp/pow/sin/log…`、`Date`、`performance`、`**`、DOM 全域、Map/Set。
@@ -40,7 +42,11 @@
 3. 實作最小切片，跑 `pnpm verify`。
 4. 開發者審查 diff；必要時新增 ADR。
 
+## 目前進度
+A0–C1 已全部實作（見 `docs/planning/stage-review-v1.md` 的偏差與未驗收清單）。後續工作以平衡校準、真機與真人測試為主。
+
 ## 文件
 - `docs/planning/v1-plan-review.md` — 規格審查、待拍板事項、路線
+- `docs/planning/stage-review-v1.md` — 階段末比對與偏差清單
 - `docs/adr/` — 架構決策（重新提出已否決方案前必讀）
 - `docs/tasks/` — 任務卡

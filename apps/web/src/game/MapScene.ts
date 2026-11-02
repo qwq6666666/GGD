@@ -39,7 +39,7 @@ export class MapScene extends Phaser.Scene {
   private bGfx!: Phaser.GameObjects.Graphics;
   private overlay!: Phaser.GameObjects.Graphics;
   private rain!: Phaser.GameObjects.Graphics;
-  private npcSprites: Record<number, Phaser.GameObjects.Rectangle> = {};
+  private npcSprites: Record<number, Phaser.GameObjects.Image> = {};
   private ghost: Ghost | null = null;
   private roadPreview: { x: number; y: number }[] = [];
   private selected: { kind: 'npc' | 'building'; id: number } | null = null;
@@ -53,7 +53,35 @@ export class MapScene extends Phaser.Scene {
     super('map');
   }
 
+  /** 程序化像素人物：4 種群體 × 孩童／成人 × 是否玩家家族。 */
+  private makeSprites(): void {
+    const skin = '#f2c9a0';
+    for (let g = 0; g < 4; g++) {
+      for (let kid = 0; kid < 2; kid++) {
+        for (let pl = 0; pl < 2; pl++) {
+          const key = `npc-${g}-${kid}-${pl}`;
+          if (this.textures.exists(key)) continue;
+          const tex = this.textures.createCanvas(key, 8, 12)!;
+          const c = tex.context;
+          const col = '#' + GROUP_COLOR[g]!.toString(16).padStart(6, '0');
+          const top = kid ? 4 : 1;
+          c.fillStyle = pl ? '#ffd54f' : '#3e2723';
+          c.fillRect(2, top, 4, 1);
+          c.fillStyle = skin;
+          c.fillRect(2, top + 1, 4, 2);
+          c.fillStyle = col;
+          c.fillRect(1, top + 3, 6, kid ? 3 : 4);
+          c.fillStyle = '#37474f';
+          c.fillRect(2, top + (kid ? 6 : 7), 1, 2);
+          c.fillRect(5, top + (kid ? 6 : 7), 1, 2);
+          tex.refresh();
+        }
+      }
+    }
+  }
+
   create(): void {
+    this.makeSprites();
     this.terrain = this.add.graphics();
     this.bGfx = this.add.graphics();
     this.overlay = this.add.graphics().setDepth(50);
@@ -319,6 +347,10 @@ export class MapScene extends Phaser.Scene {
           g.fillStyle(0x6d4c41, alpha);
           g.fillRect(x - 1, y, w + 2, 8);
       }
+      if (s.season === 3 && b.type !== 'field') {
+        g.fillStyle(0xffffff, 0.85 * alpha);
+        g.fillRect(x, y, w, 3);
+      }
       if (building) {
         g.lineStyle(1, 0xffffff, 0.8);
         g.strokeRect(x, y, w, h);
@@ -340,13 +372,11 @@ export class MapScene extends Phaser.Scene {
       let sp = this.npcSprites[n.id];
       const px = n.x * T + 8 + ((n.id * 7) % 9) - 4;
       const py = n.y * T + 10 + ((n.id * 5) % 7) - 3;
+      const key = `npc-${n.interestGroup}-${n.age < 16 ? 1 : 0}-${n.controller === 'player' ? 1 : 0}`;
       if (!sp) {
-        sp = this.add.rectangle(px, py, 5, 8, GROUP_COLOR[n.interestGroup]!).setDepth(20);
+        sp = this.add.image(px, py, key).setDepth(20).setOrigin(0.5, 0.7);
         this.npcSprites[n.id] = sp;
-      }
-      sp.setFillStyle(GROUP_COLOR[n.interestGroup]!);
-      sp.setSize(n.age < 16 ? 4 : 5, n.age < 16 ? 6 : 8);
-      sp.setStrokeStyle(n.controller === 'player' ? 1 : 0, 0xffd54f);
+      } else if (sp.texture.key !== key) sp.setTexture(key);
       sp.setAlpha(n.hunger > 70 ? 0.55 : 1);
       if (this.reduceMotion) sp.setPosition(px, py);
       else this.tweens.add({ targets: sp, x: px, y: py, duration: 350, ease: 'Sine.easeInOut' });

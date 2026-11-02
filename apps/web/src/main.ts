@@ -51,9 +51,10 @@ async function boot(): Promise<void> {
   store.subscribe(() => store.snap && scene.setSnapshot(store.snap));
   ui.onImport = (text) => {
     try {
-      parseSave(text);
+      const { warnings } = parseSave(text);
       send({ kind: 'init', seed: 0, family: 0, saveText: text });
       store.toast('已匯入存檔', 'good');
+      for (const w of warnings) store.toast(w, 'warn');
     } catch (e) {
       store.toast(`匯入失敗：${e instanceof Error ? e.message.slice(0, 60) : '格式錯誤'}`, 'warn');
     }

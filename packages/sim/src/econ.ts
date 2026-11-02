@@ -464,7 +464,8 @@ export function harvestSeason(w: WorldState): void {
     const stage = bldOf(w, e.buildingId)?.stage ?? 0;
     if (stage >= 2) y = Math.floor((y * (1000 + ECON.upgrade.field[1]!.yieldBonusPermille!)) / 1000);
     e.accumFx = 0;
-    e.fertility = Math.max(0, e.fertility - Math.max(0, ECON.fertility.harvestLoss - (stage >= 1 ? 1 : 0)));
+    const rot = ((hhOf(w, e.ownerHouseholdId)?.practices ?? 0) & 1) !== 0 ? ECON.diffusion.rotationLossReduce : 0;
+    e.fertility = Math.max(0, e.fertility - Math.max(0, ECON.fertility.harvestLoss - (stage >= 1 ? 1 : 0) - rot));
     if (y <= 0) continue;
     addProduced(w, e, FOOD, y);
     w.settlement.harvestFood += y;
@@ -649,7 +650,7 @@ export function enterpriseLabor(w: WorldState): void {
     if (wk.kind === 'maintenance') {
       const working = w.npcs.filter((n) => n.jobKind === 2 && n.jobId === wk.id).length;
       const idle = unemployedCount(w);
-      wk.openSlots = w.policies.workRelief && w.settlement.public.cash > 800 ? Math.max(0, Math.min(4, idle + working) - working) : 0;
+      wk.openSlots = w.policies.workRelief && w.settlement.public.cash > 2500 ? Math.max(0, Math.min(3, idle + working) - working) : 0;
       continue;
     }
     const working = w.npcs.filter((n) => n.jobKind === 2 && n.jobId === wk.id).length;
@@ -730,7 +731,8 @@ export function weeklyJobMatching(w: WorldState): void {
   const cands = w.npcs.filter((n) => isWorkAge(n) && n.illnessUntil <= w.tick);
   const jobless = cands.filter((n) => n.jobKind === 0).sort((a, b) => b.unemployedWeeks - a.unemployedWeeks || a.id - b.id);
   const switchers = cands.filter((n) => n.jobKind !== 0 && n.cooldownUntil <= w.tick && n.id !== w.leadership.leaderId).sort((a, b) => a.id - b.id);
-  const order = [...jobless, ...switchers];
+  // 每週最多處理 24 位申請者（失業者優先），其餘留待下週，避免大聚落單日步進尖峰
+  const order = [...jobless, ...switchers].slice(0, 24);
   for (const n of order) {
     const hh = hhOf(w, n.householdId);
     const home = hh ? bldOf(w, hh.homeId) : undefined;
@@ -915,7 +917,7 @@ function publicOrders(w: WorldState, c: number, orders: Order[]): void {
     const target = w.npcs.length * ECON.relief.reserveDays;
     const priceOk = w.settlement.prices[FOOD]! * 1000 <= ECON.basePrice[FOOD]! * ECON.relief.buyMaxPriceFx;
     const want = target - w.settlement.public.stock[FOOD]!;
-    if (want > 0 && priceOk && w.settlement.public.cash > 800) orders.push({ ref: 'p', qty: want, prio: 60000, sort: 0 });
+    if (want > 0 && priceOk && w.settlement.public.cash > 1200) orders.push({ ref: 'p', qty: want, prio: 60000, sort: 0 });
     return;
   }
   let miss = 0;

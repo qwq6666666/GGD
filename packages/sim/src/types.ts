@@ -169,6 +169,8 @@ export interface Household extends Holder {
   /** 本週與上週無法買足糧食的次數 */
   shortWeeks: number;
   famineTick: number;
+  /** 已採用的新做法（位元）：1 = 輪作 */
+  practices: number;
 }
 
 export interface PublicWork {

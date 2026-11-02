@@ -100,7 +100,7 @@
     "triggerDays": 7,
     "topUpDays": 14,
     "reservePermille": 200,
-    "reserveDays": 15,
+    "reserveDays": 30,
     "buyMaxPriceFx": 1300
   },
   "household": {
@@ -312,5 +312,10 @@
     "lossSeasonsStop": 4,
     "stopSeasonsExit": 2,
     "liquidatePermille": 500
+  },
+  "diffusion": {
+    "basePermille": 6,
+    "perFriendRatioPermille": 90,
+    "rotationLossReduce": 1
   }
 }

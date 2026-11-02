@@ -54,6 +54,8 @@ export class Ui {
   priceHist: { week: number; prices: number[] }[] = [];
   settings = { fs: 15, reduce: false };
   private lastSheetKey = '';
+  private tutStep = 0;
+  private tutSeen = false;
   private order = { node: 1, item: 0, qty: 50 };
 
   constructor(private store: Store, private scene: MapScene) {
@@ -78,6 +80,48 @@ export class Ui {
     q('#sheet').addEventListener('input', (e) => this.onInput(e));
     q('#sheet').addEventListener('change', (e) => this.onInput(e));
     store.subscribe(() => this.onSnapshot());
+    try {
+      const v = localStorage.getItem('ss-tutorial');
+      this.tutStep = v === 'done' ? 99 : Number(v ?? 0) || 0;
+    } catch { /* 無法讀取時從頭開始 */ }
+    q('#hint').addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('[data-tut]') as HTMLElement | null;
+      if (!b) return;
+      if (b.dataset.tut === 'skip') this.setTut(99);
+      else this.setTut(this.tutStep + 1);
+    });
+  }
+
+  private setTut(n: number): void {
+    this.tutStep = n;
+    try {
+      localStorage.setItem('ss-tutorial', n >= 99 ? 'done' : String(n));
+    } catch { /* 忽略 */ }
+    this.updateHint();
+  }
+
+  restartTutorial(): void {
+    this.setTut(0);
+  }
+
+  /** 簡短教學：依玩家進度一步步提示，隨時可略過（GDD 15 C1）。 */
+  private tutorialText(): string {
+    const s = this.store.snap;
+    if (!s || this.tutStep >= 99) return '';
+    const open = s.proposals.filter((p) => p.status === 0).length;
+    const steps: { when: boolean; text: string }[] = [
+      { when: true, text: '歡迎，領袖。按右上角 ▶ 讓時間流動，隨時可按 ⏸ 暫停思考。點地圖上的人或建築可查看他們的想法。' },
+      { when: open > 0, text: '居民提出了提案（「提案」有紅點）。核准、延後或拒絕都有代價，也會影響居民對你的信任。' },
+      { when: s.works.some((w) => w.kind !== 'maintenance') || s.stats.pop > 0 && s.tick > 150, text: '公共工程需要人手與材料，進度可在「建設」查看；冬季農閒最容易招到人。' },
+      { when: s.seasonSummary.length >= 1, text: '季末會結算支持度。到「家族」看是哪些因素在拖累；偏袒自家會被察覺。' },
+      { when: s.tick > 270, text: '糧價與存糧是春荒前的關鍵。「世界」可調政策、向貿易節點採購。「歷史」記錄因果。' },
+    ];
+    const cur = steps[this.tutStep];
+    if (!cur) {
+      this.setTut(99);
+      return '';
+    }
+    return cur.when ? cur.text : '';
   }
 
   // ---------- 遊戲內互動 ----------
@@ -190,8 +234,10 @@ export class Ui {
     if (this.mode.kind === 'place') t = this.anchor ? '已選位置；到「建設」面板確認，或點別處改位置。' : `點地圖選擇「${BUILDING_LABEL[this.mode.type] ?? ''}」的位置（出入口在下方黃點）。`;
     else if (this.mode.kind === 'road') t = this.roadTiles.length ? `路線 ${this.roadTiles.length} 格；到「建設」面板確認。` : this.anchor ? '再點終點。' : '點起點。';
     else if (this.mode.kind === 'zone') t = this.rect ? '已選範圍；到「建設」面板確認。' : this.anchor ? '再點對角。' : '點範圍的一個角。';
-    el.hidden = !t;
-    el.textContent = t;
+    const tut = t ? '' : this.tutorialText();
+    el.hidden = !t && !tut;
+    if (t) el.textContent = t;
+    else if (tut) el.innerHTML = `${esc(tut)}<div class="row"><button class="btn" data-tut="next">知道了</button><button class="btn" data-tut="skip">略過教學</button></div>`;
   }
 
   // ---------- 面板 ----------
@@ -223,6 +269,7 @@ export class Ui {
       if (this.priceHist.length > 30) this.priceHist.shift();
     }
     this.renderTop(s);
+    this.updateHint();
     this.renderToasts();
     this.renderSheet(false);
     if (this.card) this.renderCard();
@@ -516,7 +563,7 @@ export class Ui {
   private systemBody(): string {
     return `<div class="row"><button class="btn" data-act="save">立即存檔</button><button class="btn" data-act="export">匯出存檔</button><label class="btn">匯入存檔<input type="file" accept=".json,application/json" data-act="import" hidden /></label></div>
     <div class="card"><div>文字大小：<b>${this.settings.fs}px</b></div><input type="range" min="13" max="22" value="${this.settings.fs}" data-act="fs" /><label><input type="checkbox" data-act="reduce" ${this.settings.reduce ? 'checked' : ''} /> 關閉動畫</label></div>
-    <div class="row"><button class="btn danger" data-act="newgame">重新開始新遊戲</button></div><div class="muted">自動存檔：每季結束與切到背景時。關閉 App 即暫停，不做離線追趕。</div>`;
+    <div class="row"><button class="btn" data-act="tutorial">重看教學</button><button class="btn danger" data-act="newgame">重新開始新遊戲</button></div><div class="muted">自動存檔：每季結束與切到背景時。關閉 App 即暫停，不做離線追趕。</div>`;
   }
 
   // 歷史 ----------------------------------------------------------
@@ -686,6 +733,7 @@ export class Ui {
       case 'save': this.store.send({ kind: 'save' }); this.store.toast('已存檔', 'good'); break;
       case 'export': this.store.send({ kind: 'exportSave' }); break;
       case 'newgame': this.onNewGame(); break;
+      case 'tutorial': this.restartTutorial(); this.closeSheet(); break;
       default: break;
     }
     void p3;
