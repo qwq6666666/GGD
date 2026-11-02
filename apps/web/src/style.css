@@ -1,0 +1,50 @@
+:root {
+  --bg: #1f261c;
+  --panel: #2f3b2a;
+  --text: #f1ecd8;
+  --accent: #d8b45a;
+  font-family: system-ui, 'Noto Sans TC', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100dvh;
+  max-width: 900px;
+  margin: 0 auto;
+}
+#top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  background: var(--panel);
+}
+.place { font-weight: 700; }
+#stats { flex: 1; font-size: 14px; opacity: 0.9; }
+#speed button, #bottom button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: #3e4c37;
+  color: var(--text);
+  font-size: 16px;
+}
+#speed button[aria-pressed='true'] { background: var(--accent); color: #1f261c; }
+#map { overflow: auto; padding: 12px; }
+#debug { margin: 0; font-size: 13px; white-space: pre-wrap; }
+#bottom {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 8px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  background: var(--panel);
+}
+#bottom button:disabled { opacity: 0.4; }

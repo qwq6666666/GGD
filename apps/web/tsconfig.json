@@ -1,0 +1,33 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "vite/client"
+    ]
+  },
+  "include": [
+    "src/**/*",
+    "vite.config.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/content"
+    },
+    {
+      "path": "../../packages/sim"
+    },
+    {
+      "path": "../../packages/schema"
+    },
+    {
+      "path": "../../packages/persistence"
+    }
+  ]
+}

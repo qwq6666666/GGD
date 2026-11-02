@@ -1,0 +1,14 @@
+{
+  "name": "@ss/headless",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ss/sim": "workspace:*",
+    "@ss/schema": "workspace:*",
+    "@ss/persistence": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.12"
+  }
+}

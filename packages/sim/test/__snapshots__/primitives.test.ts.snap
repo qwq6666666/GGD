@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`PRNG > 序列固定（防止實作被無意改動而破壞舊存檔重播） 1`] = `
+[
+  1028872839,
+  2516511472,
+  400437680,
+]
+`;

@@ -1,0 +1,6 @@
+#!/bin/sh
+# GDD 16.4：每次提交前自動執行 lint、typecheck 與單元測試。
+set -e
+pnpm -s lint
+pnpm -s typecheck
+pnpm -s test

@@ -1,0 +1,37 @@
+{
+  "$comment": "所有標示 calibrated:false 的數值皆為「待校準」（GDD 第 18 章），只能經 headless 模擬或 playtest 調整，不得於程式碼中寫死。定點數尺度 FX=1000（1.0 = 1000）。",
+  "calendar": {
+    "calibrated": true,
+    "daysPerYear": 360,
+    "daysPerSeason": 90,
+    "daysPerMonth": 30,
+    "daysPerWeek": 6,
+    "restDayOfWeek": 6
+  },
+  "speed": {
+    "calibrated": false,
+    "normalMsPerDay": 3000,
+    "fastDaysPerSecond": 2,
+    "maxDaysPerSecond": 5
+  },
+  "start": {
+    "calibrated": false,
+    "startSeason": 0,
+    "startDayOfSeason": 60,
+    "initialSupport": 60,
+    "publicFood": 300,
+    "householdFoodDays": 30
+  },
+  "map": {
+    "calibrated": true,
+    "width": 96,
+    "height": 96,
+    "initialBuildable": 48,
+    "chunkSize": 16
+  },
+  "weather": {
+    "calibrated": false,
+    "$comment": "A0 佔位：每日以 PRNG 抽天氣，僅用來驗證決定性管線；A1 起由環境系統取代。",
+    "rainChance65536": 16384
+  }
+}
