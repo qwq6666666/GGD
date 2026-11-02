@@ -1,7 +1,7 @@
 import type { Command, CommandResult } from '@ss/schema';
 import { ECON } from '@ss/content';
 import {
-  holdElection, nominateHeir, respondProposal, roadCost, setPolicy, switchFamily,
+  holdElection, nominateHeir, respondProposal, roadCost, setPolicy, switchFamily, type RoadMode,
 } from './civic.js';
 import { PUBLIC_SECTOR, bumpMapVersion, cancelWork, materialsValue, queueWork, reserveMaterials } from './econ.js';
 import { pushEvent } from './history.js';
@@ -37,20 +37,41 @@ export function applyCommand(w: WorldState, cmd: Command): CommandResult {
       const perm = needLeader(w);
       if (perm) return reject(cmd, perm);
       const raw = p.tiles;
+      const mode = (['dirt', 'stone', 'bridge', 'stonebridge'].includes(String(p.mode)) ? p.mode : 'dirt') as RoadMode;
       if (!Array.isArray(raw) || raw.length === 0 || raw.length > 60) return reject(cmd, 'invalid_target');
+      const target = mode === 'dirt' ? 1 : mode === 'stone' ? 2 : mode === 'bridge' ? 3 : 4;
       const tiles: { x: number; y: number; type: number }[] = [];
       for (const t of raw as Record<string, unknown>[]) {
         const x = num(t, 'x');
         const y = num(t, 'y');
-        if (x === undefined || y === undefined || !inBounds(w.map, x, y) || !inBuildZone(x, y)) return reject(cmd, 'invalid_target');
+        if (x === undefined || y === undefined || !inBounds(w.map, x, y)) return reject(cmd, 'invalid_target');
         const i = tileIdx(w.map, x, y);
-        if (w.map.water[i] !== 0 || w.map.occ[i] !== 0 || w.map.stone[i] !== 0) return reject(cmd, 'invalid_target');
-        if (w.map.road[i] === 0 && !tiles.some((q) => q.x === x && q.y === y)) tiles.push({ x, y, type: 1 });
+        const have = w.map.road[i]!;
+        const onWater = w.map.water[i] !== 0;
+        if (w.map.occ[i] !== 0 || w.map.stone[i] !== 0) return reject(cmd, 'invalid_target');
+        const ok =
+          mode === 'dirt' ? inBuildZone(x, y) && !onWater && have === 0 : mode === 'stone' ? have === 1 : mode === 'bridge' ? onWater && have === 0 && x >= 8 : have === 3;
+        if (!ok) return reject(cmd, 'invalid_target');
+        if (!tiles.some((q) => q.x === x && q.y === y)) tiles.push({ x, y, type: target });
       }
       if (tiles.length === 0) return reject(cmd, 'nothing_to_build');
-      const c = roadCost(w, tiles.length);
+      const c = roadCost(w, tiles.length, mode);
       if (w.settlement.public.cash < c.pd * w.settlement.wage[PUBLIC_SECTOR]!) return reject(cmd, 'insufficient_budget');
       queueWork(w, { kind: 'road', buildingId: 0, tiles, requiredPDFx: c.pd * 1000, needed: c.materials, causeCommandId: cmd.commandId, proposalId: 0, beneficiaryHouseholdId: 0 });
+      w.version++;
+      return accept(cmd);
+    }
+    case 'UpgradeBuilding': {
+      const perm = needLeader(w);
+      if (perm) return reject(cmd, perm);
+      const b = w.buildings.find((x) => x.id === num(p, 'buildingId'));
+      if (!b || b.state !== 'active') return reject(cmd, 'invalid_target');
+      const list = b.type === 'field' ? ECON.upgrade.field : b.type === 'home' || b.type === 'publichome' ? ECON.upgrade.home : null;
+      const cfg = list?.[b.stage] as { wood: number; stone: number; personDays: number } | undefined;
+      if (!cfg) return reject(cmd, 'nothing_to_build');
+      if (w.works.some((x) => x.kind === 'upgrade' && x.buildingId === b.id && x.state < 2)) return reject(cmd, 'not_allowed');
+      if (w.settlement.public.cash < cfg.personDays * w.settlement.wage[PUBLIC_SECTOR]!) return reject(cmd, 'insufficient_budget');
+      queueWork(w, { kind: 'upgrade', buildingId: b.id, tiles: [], requiredPDFx: cfg.personDays * 1000, needed: [0, cfg.wood, cfg.stone, 0, 0], causeCommandId: cmd.commandId, proposalId: 0, beneficiaryHouseholdId: b.ownerHouseholdId });
       w.version++;
       return accept(cmd);
     }
@@ -104,7 +125,7 @@ export function applyCommand(w: WorldState, cmd: Command): CommandResult {
         }
         bumpMapVersion(w, x, y);
       } else {
-        w.zones.push({ x, y, w: zw, h: zh, kind });
+        w.zones.push({ x, y, w: zw, h: zh, kind, founded: 0 });
       }
       w.version++;
       return accept(cmd);

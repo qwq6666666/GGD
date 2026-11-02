@@ -145,6 +145,8 @@ export interface Npc {
   spouseId: number;
   parentIds: number[];
   illnessUntil: number;
+  /** 傳記（僅玩家家族記錄，最多 12 筆） */
+  bio: string[];
 }
 
 export interface Reciprocity {
@@ -171,7 +173,7 @@ export interface Household extends Holder {
 
 export interface PublicWork {
   id: number;
-  kind: 'building' | 'road' | 'maintenance';
+  kind: 'building' | 'road' | 'maintenance' | 'upgrade';
   buildingId: number;
   tiles: { x: number; y: number; type: number }[];
   requiredPDFx: number;
@@ -191,7 +193,7 @@ export interface PublicWork {
 export interface Proposal {
   id: number;
   proposerId: number;
-  kind: 'road' | 'food_crisis' | 'housing' | 'tools';
+  kind: 'road' | 'food_crisis' | 'housing' | 'tools' | 'clinic';
   target: { x: number; y: number; toX: number; toY: number; ent: number };
   evidence: number;
   cost: number;
@@ -221,6 +223,10 @@ export interface Policies {
   roadPriority: number;
   /** 以工代賑：1 開 0 關 */
   workRelief: number;
+  /** 教育預算（文／季，付給學堂教師） */
+  educationBudget: number;
+  /** 醫療預算（文／季，付給診所人員） */
+  healthBudget: number;
   pending: PendingPolicy[];
 }
 
@@ -229,8 +235,10 @@ export interface Zone {
   y: number;
   w: number;
   h: number;
-  /** 0 保育區 1 商業用地 */
+  /** 0 保育區 1 商業用地 2 植林 */
   kind: number;
+  /** 商業用地：是否已有家庭開設企業 */
+  founded: number;
 }
 
 export interface SimEvent {
@@ -263,6 +271,8 @@ export interface Tombstone {
   deathTick: number;
   householdId: number;
   keyEventIds: number[];
+  parentIds: number[];
+  bio: string[];
 }
 
 export interface GoodsStats {
@@ -384,4 +394,8 @@ export interface WorldState {
   benefits: { tick: number; workId: number; households: number[]; cost: number }[];
   /** 季末摘要，供 UI 顯示 */
   seasonSummary: { tick: number; text: string }[];
+  /** 每 5 年一張的地圖縮圖（24×24，0 水 1 地 2 林 3 路 4 建築） */
+  mapSnaps: { tick: number; grid: number[] }[];
+  /** 最近一次疫病的日期，用於診療覆蓋不足提案 */
+  lastEpidemicTick: number;
 }

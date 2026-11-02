@@ -1,4 +1,5 @@
-import type { SimEvent, WorldState } from './types.js';
+import { toDate } from './calendar.js';
+import type { Npc, SimEvent, WorldState } from './types.js';
 
 export type NewEvent = Omit<SimEvent, 'id' | 'tick'>;
 
@@ -25,4 +26,11 @@ export function compactHistory(w: WorldState, tick: number): void {
 
 export function recentEvents(w: WorldState, n: number): SimEvent[] {
   return w.eventLog.filter((e) => e.importance >= 1).slice(-n);
+}
+
+/** 傳記：只記錄玩家家族成員，最多 12 筆（GDD 9「人物傳記，玩家家族優先」）。 */
+export function pushBio(w: WorldState, n: Npc | undefined, text: string): void {
+  if (!n || n.controller !== 'player') return;
+  n.bio.push(`第${toDate(w.tick).year}年 ${text}`);
+  if (n.bio.length > 12) n.bio.shift();
 }

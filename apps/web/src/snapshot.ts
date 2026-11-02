@@ -7,7 +7,7 @@ export function buildSnapshot(w: WorldState): Snapshot {
   const npcs: NpcView[] = w.npcs.map((n) => ({
     id: n.id, name: n.name, age: n.age, householdId: n.householdId, jobKind: n.jobKind, jobId: n.jobId, x: n.x, y: n.y, state: n.state, reason: n.reason,
     hunger: n.hunger, health: n.health, mood: n.mood, controller: n.controller, skills: n.skills, traits: n.traits, satisfaction: n.satisfaction,
-    interestGroup: n.interestGroup, tags: n.tags.filter((t) => t.expiresTick > w.tick).map((t) => t.type), commute: n.commute, spouseId: n.spouseId, sex: n.sex,
+    interestGroup: n.interestGroup, tags: n.tags.filter((t) => t.expiresTick > w.tick).map((t) => t.type), commute: n.commute, spouseId: n.spouseId, sex: n.sex, bio: n.controller === 'player' ? n.bio : [],
   }));
   return {
     tick: w.tick,
@@ -33,13 +33,14 @@ export function buildSnapshot(w: WorldState): Snapshot {
     proposals: w.proposals.filter((p) => p.status === 0 || p.status === 2),
     supportLog: w.supportLog.slice(-8),
     tombstones: w.tombstones.slice(-30),
-    events: w.eventLog.filter((e) => e.importance >= 1).slice(-60),
+    events: w.eventLog.filter((e) => e.importance >= 1).slice(-120),
     seasonSummary: w.seasonSummary.slice(-12),
     warnings: w.env.warnings,
     zones: w.zones,
     nodes: w.nodes.map((n) => ({ id: n.id, name: n.name, basePrice: n.basePrice, drift: n.drift, transitDays: n.transitDays, capacity: n.capacity })),
     shipments: w.shipments.filter((s) => s.status === 0),
     effects: w.env.effects,
+    mapSnaps: w.mapSnaps,
     mapKey: `${w.roadVersion}:${Math.floor(w.tick / 90)}`,
   };
 }

@@ -28,6 +28,7 @@ export const COMMAND_TYPES = [
   'SwitchFamily',
   'OrderImport',
   'CancelWork',
+  'UpgradeBuilding',
 ] as const;
 
 export const GenericCommandSchema = CommandBaseSchema.extend({

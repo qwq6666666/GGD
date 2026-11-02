@@ -16,6 +16,7 @@ import { compactLedger, totalGoods, totalMoney } from './ledger.js';
 import { dailyDeaths, monthlyDemography, yearlyAging } from './npc.js';
 import { chance65536 } from './prng.js';
 import { dailyShipments, weeklyNodeRecovery } from './trade.js';
+import { foundEnterprises, seasonEnterpriseReview, seasonalServices, snapshotMap, yearlyEducation } from './society.js';
 import type { WorldState } from './types.js';
 import { NCOMM } from './types.js';
 import { formatDate } from './calendar.js';
@@ -74,7 +75,9 @@ function weekly(w: WorldState): void {
   weeklyNodeRecovery(w);
   generateProposals(w);
   if (w.leadership.mode === 1) aiLeaderRespond(w);
+  foundEnterprises(w);
   for (const e of w.enterprises) {
+    e.profitSeason += e.revenueWeek - e.costWeek;
     e.revenueWeek = 0;
     e.costWeek = 0;
   }
@@ -87,6 +90,7 @@ function seasonEnd(w: WorldState): void {
   forestGrowth(w);
   if (d.season === 3) winterFertility(w);
   updateExpectedPrices(w);
+  seasonEnterpriseReview(w);
   computeSupport(w);
   seasonalElectionCheck(w);
   const text = seasonSummaryText(w);
@@ -118,6 +122,7 @@ export function step(world: WorldState, opts: StepOptions = {}): StepResult {
     mintAtSeasonStart(w);
     equipTools(w);
     decideFallow(w);
+    seasonalServices(w);
   }
   w.env.weather = chance65536(w.prng, CALIBRATION.weather.rainChance65536) ? 1 : 0;
   if (w.env.weather) w.env.rainDaysThisSeason++;
@@ -142,7 +147,11 @@ export function step(world: WorldState, opts: StepOptions = {}): StepResult {
   }
   if (date.dayOfSeason === CALIBRATION.calendar.daysPerSeason) seasonEnd(w);
   if (date.dayOfYear === CALIBRATION.calendar.daysPerYear) {
+    const parentSector: Record<number, number> = {};
+    for (const n of w.npcs) parentSector[n.id] = n.lastSector;
     yearlyAging(w);
+    yearlyEducation(w, parentSector);
+    if (date.year % 5 === 0) snapshotMap(w);
     handleLeaderGone(w);
     compactLedger(w, date.year);
     compactHistory(w, w.tick);

@@ -48,6 +48,8 @@ export const POLICY_LABEL: Record<string, string> = {
   leaderSalaryMonthly: '領袖俸給（文／月，基準 60）',
   roadPriority: '道路優先',
   workRelief: '以工代賑（0 關／1 開）',
+  educationBudget: '教育預算（文／季）',
+  healthBudget: '醫療預算（文／季）',
 };
 
 export const POLICY_RANGE: Record<string, [number, number, number]> = {
@@ -57,9 +59,11 @@ export const POLICY_RANGE: Record<string, [number, number, number]> = {
   mintPerSeason: [0, 5000, 100],
   leaderSalaryMonthly: [0, 400, 10],
   workRelief: [0, 1, 1],
+  educationBudget: [0, 200, 10],
+  healthBudget: [0, 200, 10],
 };
 
-export const PROPOSAL_LABEL: Record<string, string> = { road: '修路', food_crisis: '糧食告急', housing: '住房不足', tools: '工具短缺' };
+export const PROPOSAL_LABEL: Record<string, string> = { road: '修路', food_crisis: '糧食告急', housing: '住房不足', tools: '工具短缺', clinic: '診療不足' };
 
 export function esc(s: unknown): string {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);

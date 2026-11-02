@@ -1,7 +1,8 @@
 import { NAMES } from '@ss/content';
 import { nextInt } from './prng.js';
 import { transferGoods, transferMoney } from './ledger.js';
-import { pushEvent } from './history.js';
+import { pushBio, pushEvent } from './history.js';
+import { clinicActive } from './society.js';
 import { releaseJob } from './econ.js';
 import { FOOD, type Household, type Npc, type WorldState } from './types.js';
 import { hhOf, insertSorted, npcOf, removeFrom } from './util.js';
@@ -40,7 +41,7 @@ export function killNpc(w: WorldState, n: Npc, cause: string): void {
     data: { cause, householdId: n.householdId },
   });
   keyIds.push(ev.id);
-  w.tombstones.push({ id: n.id, name: n.name, birthTick: n.birthTick, deathTick: w.tick, householdId: n.householdId, keyEventIds: keyIds });
+  w.tombstones.push({ id: n.id, name: n.name, birthTick: n.birthTick, deathTick: w.tick, householdId: n.householdId, keyEventIds: keyIds, parentIds: [...n.parentIds], bio: [...n.bio] });
   for (const o of w.npcs) {
     if (o.spouseId === n.id) o.spouseId = 0;
     if (o.relations.some((r) => r.targetId === n.id)) o.relations = o.relations.filter((r) => r.targetId !== n.id);
@@ -91,6 +92,7 @@ export function yearlyAging(w: WorldState): void {
     let p = mortality(n.age);
     const ill = n.illnessUntil > w.tick;
     if (ill) p *= 2;
+    if (clinicActive(w)) p = Math.floor(p / 2);
     const isLeader = n.id === w.leadership.leaderId;
     if (isLeader && !ill) continue;
     if (nextInt(w.prng, 1000) < p) toKill.push(n);
@@ -125,8 +127,8 @@ export function monthlyDemography(w: WorldState): void {
   const singles = w.npcs.filter((n) => n.age >= 18 && n.age <= 40 && n.spouseId === 0);
   for (const a of singles) {
     if (a.spouseId !== 0) continue;
-    const cand = singles.find((b) => b.id > a.id && b.spouseId === 0 && b.sex !== a.sex && b.householdId !== a.householdId && Math.abs(b.age - a.age) <= 8 && a.relations.some((r) => r.targetId === b.id && r.trust >= 50));
-    if (cand && nextInt(w.prng, 100) < 4) {
+    const cand = singles.find((b) => b.id > a.id && b.spouseId === 0 && b.sex !== a.sex && b.householdId !== a.householdId && Math.abs(b.age - a.age) <= 8 && !a.parentIds.some((x) => b.parentIds.includes(x)));
+    if (cand && nextInt(w.prng, 100) < 6) {
       a.spouseId = cand.id;
       cand.spouseId = a.id;
       a.relations.push({ targetId: cand.id, type: 0, trust: 70, lastInteraction: w.tick });
@@ -142,11 +144,13 @@ export function monthlyDemography(w: WorldState): void {
         insertSorted(to.memberIds, mover.id);
         mover.householdId = to.id;
       }
+      pushBio(w, a, `與${cand.name}結為夫妻`);
+      pushBio(w, cand, `與${a.name}結為夫妻`);
       pushEvent(w, { type: 'MarriageRecorded', importance: a.controller === 'player' || cand.controller === 'player' ? 3 : 1, causeIds: [], actorIds: [a.id, cand.id], summary: `${a.name} 與 ${cand.name} 結為夫妻`, data: {} });
     }
   }
   // 出生
-  const chance = perCap < 20 ? 0 : clamp1(10 + Math.floor(perCap / 4) + (slack > 0 ? 10 : -5), 0, 60);
+  const chance = perCap < 20 ? 0 : clamp1(20 + Math.floor(perCap / 4) + (slack > 0 ? 10 : -5), 0, 60);
   for (const n of w.npcs) {
     if (n.sex !== 1 || n.spouseId === 0 || n.age < 18 || n.age > 40) continue;
     const hh = hhOf(w, n.householdId);
@@ -170,12 +174,14 @@ export function monthlyDemography(w: WorldState): void {
         jobKind: 0, jobId: 0, jobSince: 0, cooldownUntil: 0, unemployedWeeks: 0, leisure: 0, commute: 0, equipped: 0, workDaysWeek: 0, arrears: 0, lastSector: -1,
         x: 0, y: 0, state: 0, reason: '', controller: n.controller, interestGroup: 3, satisfaction: 60, satisfactionBaseline: 60, lastFactor: 600,
         relations: [{ targetId: n.id, type: 0, trust: 90, lastInteraction: w.tick }],
-        tags: [], spouseId: 0, parentIds: [n.id, n.spouseId], illnessUntil: 0,
+        tags: [], spouseId: 0, parentIds: [n.id, n.spouseId], illnessUntil: 0, bio: [],
       };
       w.npcs.push(child);
       hh.memberIds.push(id);
       hh.memberIds.sort((a, b) => a - b);
       n.relations.push({ targetId: id, type: 0, trust: 90, lastInteraction: w.tick });
+      pushBio(w, child, `出生於${hh.name}`);
+      pushBio(w, n, `生下${child.name}`);
       pushEvent(w, { type: 'BirthRecorded', importance: n.controller === 'player' ? 3 : 1, causeIds: [], actorIds: [id, n.id], summary: `${hh.name} 添了新成員 ${child.name}`, data: {} });
     }
   }

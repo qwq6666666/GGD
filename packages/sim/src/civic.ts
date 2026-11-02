@@ -1,7 +1,7 @@
 import { ECON } from '@ss/content';
 import { toDate } from './calendar.js';
 import { clamp } from './fixed.js';
-import { pushEvent } from './history.js';
+import { pushBio, pushEvent } from './history.js';
 import { materialsValue, queueWork, PUBLIC_SECTOR } from './econ.js';
 import { findSpot, inBuildZone } from './map.js';
 import { findPath } from './path.js';
@@ -44,9 +44,13 @@ function roadTilesBetween(w: WorldState, sx: number, sy: number, gx: number, gy:
   return tiles;
 }
 
-export function roadCost(w: WorldState, tiles: number): { materials: number[]; pd: number; cash: number } {
-  const materials = [0, tiles * ECON.road.dirtWood, 0, 0, 0];
-  const pd = tiles * ECON.road.dirtPersonDays;
+export type RoadMode = 'dirt' | 'stone' | 'bridge' | 'stonebridge';
+
+export function roadCost(w: WorldState, tiles: number, mode: RoadMode = 'dirt'): { materials: number[]; pd: number; cash: number } {
+  const U = ECON.upgrade;
+  const materials =
+    mode === 'dirt' ? [0, tiles * ECON.road.dirtWood, 0, 0, 0] : mode === 'stone' ? [0, 0, tiles * U.stoneRoad.stone, 0, 0] : mode === 'bridge' ? [0, tiles * U.bridge.wood, 0, 0, 0] : [0, 0, tiles * U.bridge.stoneStone, 0, 0];
+  const pd = tiles * (mode === 'dirt' ? ECON.road.dirtPersonDays : mode === 'stone' ? U.stoneRoad.personDays : mode === 'bridge' ? U.bridge.personDays : U.bridge.stonePersonDays);
   return { materials, pd, cash: pd * w.settlement.wage[PUBLIC_SECTOR]! + materialsValue(materials) };
 }
 
@@ -137,6 +141,17 @@ export function generateProposals(w: WorldState): void {
       }
     }
   }
+  // 診療覆蓋不足：一年內發生過疫病且沒有診所
+  if (!openProposalFor(w, 'clinic', 0) && w.tick - w.lastEpidemicTick < 360 && !w.buildings.some((b) => b.type === 'clinic') && highThisSeason(w) < 3) {
+    const proposer = w.npcs.filter(isAdult)[0];
+    if (proposer) {
+      w.proposals.push({
+        id: w.nextIds.proposal++, proposerId: proposer.id, kind: 'clinic', target: { x: 0, y: 0, toX: 0, toY: 0, ent: 0 }, evidence: 70, cost: 200,
+        materials: [0, ECON.build.clinic.wood, ECON.build.clinic.stone, 0, 0], expectedEffects: '疫病後診療覆蓋不足，興建診所；另需設定醫療預算才會運作',
+        createdTick: w.tick, expiry: w.tick + 90, status: 0, priority: 1,
+      });
+    }
+  }
   // 工具短缺
   if (!openProposalFor(w, 'tools', 0)) {
     const need = w.enterprises.reduce((s, e) => s + e.employeeIds.length, 0);
@@ -213,6 +228,16 @@ function applyProposal(w: WorldState, p: Proposal): RespondResult {
     b.workId = wk.id;
     return { ok: true };
   }
+  if (p.kind === 'clinic') {
+    const spot = findSpot(w.map, w.buildings, 'clinic', 46, 40);
+    if (!spot) return { ok: false, reason: 'no_space' };
+    if (S.public.cash < p.cost) return { ok: false, reason: 'insufficient_budget' };
+    const b = addBuilding(w, 'clinic', spot.x, spot.y, 0, 'building');
+    const cfg = ECON.build.clinic;
+    const wk = queueWork(w, { kind: 'building', buildingId: b.id, tiles: [], requiredPDFx: cfg.personDays * 1000, needed: [0, cfg.wood, cfg.stone, 0, 0], causeCommandId: 0, proposalId: p.id, beneficiaryHouseholdId: 0 });
+    b.workId = wk.id;
+    return { ok: true };
+  }
   if (p.kind === 'housing') {
     const spot = findSpot(w.map, w.buildings, 'publichome', 44, 58);
     if (!spot) return { ok: false, reason: 'no_space' };
@@ -258,6 +283,8 @@ export function setPolicy(w: WorldState, key: string, value: number, commandId: 
     leaderSalaryMonthly: [0, 400],
     roadPriority: [0, 3],
     workRelief: [0, 1],
+    educationBudget: [0, ECON.edu.budgetPerSeasonMax],
+    healthBudget: [0, ECON.edu.budgetPerSeasonMax],
   };
   const lim = limits[key];
   if (!lim) return { ok: false, reason: 'unknown_policy' };
@@ -439,6 +466,7 @@ export function holdElection(w: WorldState, challengerIsPlayer: boolean): void {
   }
   L.lastElectionTick = w.tick;
   const challengerWins = forCh > forInc;
+  pushBio(w, incumbent, forInc >= forCh ? '在改選中勝出' : '在改選中落敗');
   pushEvent(w, { type: 'ElectionHeld', importance: 3, causeIds: [], actorIds: [incumbent.id, challenger.id], summary: `改選：${incumbent.name} ${forInc} 票 對 ${challenger.name} ${forCh} 票`, data: { forInc, forCh } });
   if (!challengerWins) {
     L.lowSupportSeasons = 0;
@@ -457,6 +485,7 @@ export function holdElection(w: WorldState, challengerIsPlayer: boolean): void {
     L.mode = 0;
     L.nextElectionTick = -1;
     L.support = 50;
+    pushBio(w, challenger, '重新當選領袖');
     pushEvent(w, { type: 'LeaderChanged', importance: 3, causeIds: [], actorIds: [challenger.id], summary: `${challenger.name} 重新當選領袖`, data: {} });
   } else {
     L.playerIsLeader = 0;
@@ -490,6 +519,7 @@ export function handleLeaderGone(w: WorldState): void {
       L.termStartTick = w.tick;
       L.heirId = 0;
       setPlayerControl(w, pHh!.id);
+      pushBio(w, next, '繼任為領袖');
       pushEvent(w, { type: 'LeaderChanged', importance: 3, causeIds: [], actorIds: [next.id], summary: `${next.name} 繼任領袖`, data: {} });
       return;
     }

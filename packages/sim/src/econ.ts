@@ -21,7 +21,7 @@ import {
   type WorldState,
 } from './types.js';
 import { bldOf, entOf, hhOf, isWorkAge, npcOf, removeFrom, sum } from './util.js';
-import { pushEvent } from './history.js';
+import { pushBio, pushEvent } from './history.js';
 import { addEnterprise } from './start.js';
 
 export const PUBLIC_SECTOR = 5;
@@ -309,6 +309,24 @@ export function completeWork(w: WorldState, wk: PublicWork): void {
     }
   }
   const served: number[] = [];
+  if (wk.kind === 'upgrade') {
+    const b = bldOf(w, wk.buildingId);
+    if (b) {
+      const cfgList = b.type === 'field' ? ECON.upgrade.field : ECON.upgrade.home;
+      const cfg = cfgList[b.stage] as { capacity?: number; fertilityBonus?: number } | undefined;
+      b.stage++;
+      if (cfg?.capacity) b.capacity = cfg.capacity;
+      if (b.type === 'field') {
+        const ent = w.enterprises.find((x) => x.buildingId === b.id);
+        if (ent && cfg?.fertilityBonus) ent.fertility = Math.min(ECON.fertility.max, ent.fertility + cfg.fertilityBonus);
+      }
+      pushEvent(w, { type: 'BuildingUpgraded', importance: 1, causeIds: [], actorIds: [], summary: `${buildingLabel(b.type)}升級完成（第 ${b.stage} 階段）`, data: { buildingId: b.id, stage: b.stage } });
+    }
+    w.benefits.push({ tick: w.tick, workId: wk.id, households: [], cost: wk.cost + materialsValue(wk.needed) });
+    w.leadership.publicSpendSeason[3]! += materialsValue(wk.needed);
+    for (const n of w.npcs) n.commute = -2;
+    return;
+  }
   if (wk.kind === 'building') {
     const b = bldOf(w, wk.buildingId);
     if (b) {
@@ -443,8 +461,10 @@ export function harvestSeason(w: WorldState): void {
     const quality = 500 + Math.floor((500 * e.fertility) / 100);
     let y = Math.floor((ECON.farm.perPersonSeason * e.accumFx * quality) / (ECON.farm.workDaysPerSeason * 1000 * 1000));
     y = Math.floor((y * w.env.yieldPermille) / 1000);
+    const stage = bldOf(w, e.buildingId)?.stage ?? 0;
+    if (stage >= 2) y = Math.floor((y * (1000 + ECON.upgrade.field[1]!.yieldBonusPermille!)) / 1000);
     e.accumFx = 0;
-    e.fertility = Math.max(0, e.fertility - ECON.fertility.harvestLoss);
+    e.fertility = Math.max(0, e.fertility - Math.max(0, ECON.fertility.harvestLoss - (stage >= 1 ? 1 : 0)));
     if (y <= 0) continue;
     addProduced(w, e, FOOD, y);
     w.settlement.harvestFood += y;
@@ -616,7 +636,7 @@ export function enterpriseLabor(w: WorldState): void {
       fired = true;
     }
     const now = e.employeeIds.length;
-    if (!fired && e.strategy !== 3) {
+    if (!fired && e.strategy < 2) {
       let slots = 0;
       while (slots < 3 && now + slots < maxWorkers(e) && marginalValue(w, e, now + slots) >= wage && e.cash + ownerCash(w, e) >= (now + slots + 1) * 5 * wage) slots++;
       e.openSlots = slots;
@@ -777,6 +797,7 @@ function takeJob(w: WorldState, n: Npc, o: JobOption): void {
   n.unemployedWeeks = 0;
   n.cooldownUntil = w.tick + ECON.npc.cooldownWeeks * 6;
   n.equipped = 0;
+  if (o.kind === 1) pushBio(w, n, `開始在${buildingLabel(bldOf(w, entOf(w, o.id)?.buildingId ?? 0)?.type ?? '')}工作`);
   if (o.kind === 1) {
     const e = entOf(w, o.id)!;
     e.employeeIds.push(n.id);
@@ -939,6 +960,7 @@ export function runMarket(w: WorldState): void {
           want -= q;
           bought += q;
           s.revenueWeek += q * price;
+          if (o.ref[0] === 'e') entOf(w, Number(o.ref.slice(1)))!.costWeek += q * price;
         }
       }
     }
@@ -989,7 +1011,10 @@ function addFamineTag(w: WorldState, h: Household, cause: number): void {
   h.safetyDays = Math.min(ECON.household.safetyDays + 30, h.safetyDays + 5);
   for (const id of h.memberIds) {
     const n = npcOf(w, id);
-    if (n && !n.tags.some((t) => t.type === '饑荒' && t.expiresTick > w.tick + 300)) n.tags.push({ type: '饑荒', strength: 700, expiresTick: w.tick + 720, causeId: cause });
+    if (n && !n.tags.some((t) => t.type === '饑荒' && t.expiresTick > w.tick + 300)) {
+      n.tags.push({ type: '饑荒', strength: 700, expiresTick: w.tick + 720, causeId: cause });
+      pushBio(w, n, '家裡斷糧，靠救濟與親友撐過去');
+    }
   }
 }
 
@@ -1083,6 +1108,12 @@ export function weeklyRelief(w: WorldState): void {
 
 // ---------- 每日消費 ----------
 
+function homeComfort(w: WorldState, h: Household): number {
+  const b = bldOf(w, h.homeId);
+  if (!b || b.stage === 0) return 0;
+  return ECON.upgrade.home[Math.min(b.stage, ECON.upgrade.home.length) - 1]!.moodBonus;
+}
+
 /** GDD 3.1 步驟 5：每日進食與冬季燃料。 */
 export function dailyConsumption(w: WorldState, fuelMult = 1): { starved: number[] } {
   const starved: number[] = [];
@@ -1106,7 +1137,7 @@ export function dailyConsumption(w: WorldState, fuelMult = 1): { starved: number
       if (n.hunger > 70) n.health -= 3;
       else if (n.hunger === 0 && n.health < 100 && n.illnessUntil <= w.tick) n.health += 1;
       if (cold) n.health -= 1;
-      n.mood = clamp(n.mood + Math.trunc((70 - Math.floor(n.hunger / 2) - (cold ? 20 : 0) + Math.min(15, h.stock[FURN]! * 5) - n.mood) / 10), 0, 100);
+      n.mood = clamp(n.mood + Math.trunc((70 + homeComfort(w, h) - Math.floor(n.hunger / 2) - (cold ? 20 : 0) + Math.min(15, h.stock[FURN]! * 5) - n.mood) / 10), 0, 100);
       if (n.health <= 0) starved.push(n.id);
     }
   }

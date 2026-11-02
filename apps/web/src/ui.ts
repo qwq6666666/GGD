@@ -6,21 +6,33 @@ import type { NpcView, Snapshot, Speed } from './protocol.js';
 import type { Store } from './store.js';
 
 void _fp;
-type Mode = { kind: 'select' } | { kind: 'place'; type: string } | { kind: 'road' } | { kind: 'zone'; zone: number };
+type Mode = { kind: 'select' } | { kind: 'place'; type: string } | { kind: 'road'; mode: string } | { kind: 'zone'; zone: number };
 
 const BUILD_OPTIONS: { id: string; label: string; mode: Mode; note: string }[] = [
-  { id: 'road', label: '土路', mode: { kind: 'road' }, note: '點兩個地點，沿最短路線鋪路。降低通勤成本。' },
+  { id: 'road', label: '土路', mode: { kind: 'road', mode: 'dirt' }, note: '點兩個地點，沿最短路線鋪路。降低通勤成本。' },
+  { id: 'stone', label: '石路', mode: { kind: 'road', mode: 'stone' }, note: '把既有土路升級為石路（成本 1），點兩個地點。需要石材。' },
+  { id: 'bridge', label: '木橋', mode: { kind: 'road', mode: 'bridge' }, note: '在水面鋪木橋，點兩個地點。' },
+  { id: 'stonebridge', label: '石橋', mode: { kind: 'road', mode: 'stonebridge' }, note: '把木橋升級為石橋。' },
   { id: 'publichome', label: '公共住宅', mode: { kind: 'place', type: 'publichome' }, note: '容納 5 人；家庭可入住並繳租（V1 免租）。' },
   { id: 'field', label: '農田', mode: { kind: 'place', type: 'field' }, note: '下次收成才增產；耕作會逐年消耗肥力。' },
   { id: 'lumber', label: '林場', mode: { kind: 'place', type: 'lumber' }, note: '提供木材與燃料；會減少周圍森林。' },
   { id: 'quarry', label: '採石場', mode: { kind: 'place', type: 'quarry' }, note: '需貼近礦藏（東北方）。' },
   { id: 'toolshop', label: '工具工坊', mode: { kind: 'place', type: 'toolshop' }, note: '生產工具，需要木材與石材。' },
   { id: 'furnshop', label: '家具工坊', mode: { kind: 'place', type: 'furnshop' }, note: '收入上升後家具需求才會成長。' },
+  { id: 'school', label: '學堂', mode: { kind: 'place', type: 'school' }, note: '學齡兒童技能成長；需另設教育預算才運作。' },
+  { id: 'clinic', label: '診所', mode: { kind: 'place', type: 'clinic' }, note: '縮短病程、降低死亡率；需另設醫療預算才運作。' },
+  { id: 'zone1', label: '商業用地', mode: { kind: 'zone', zone: 1 }, note: '劃設後，有足夠資金的家庭會依序開設工坊。點兩個對角。' },
   { id: 'zone0', label: '保育區', mode: { kind: 'zone', zone: 0 }, note: '劃定後林場不會砍伐此範圍。點兩個對角。' },
   { id: 'zone2', label: '植林', mode: { kind: 'zone', zone: 2 }, note: '在可建區外的空地植樹，每格 2 文。點兩個對角。' },
 ];
 
 const BUILD_WHY: Record<string, { groups: string; short: string; risk: string }> = {
+  school: { groups: '學齡兒童與其家庭', short: '施工後設定教育預算才有效果', risk: '每季教育經費；孩子成年後才見成果' },
+  clinic: { groups: '全體居民，特別是老人', short: '疫病時病程縮短、死亡率下降', risk: '每季醫療經費' },
+  stone: { groups: '常走該路線的居民', short: '通行成本再降一半', risk: '消耗石材，與工坊競爭' },
+  bridge: { groups: '兩岸居民', short: '打通對岸', risk: '洪水可能沖毀木橋' },
+  stonebridge: { groups: '兩岸居民', short: '不怕洪水', risk: '石材與人日較高' },
+  zone1: { groups: '有資金的家庭與其雇工', short: '新工坊提供就業與商品', risk: '市場小，可能虧損後結業' },
   road: { groups: '路線沿線的住戶與農田', short: '通勤成本下降，產量上升', risk: '偏袒判定：只惠及自家會被察覺' },
   publichome: { groups: '無屋或擁擠的家庭', short: '住房餘裕提高，聚落吸引力上升', risk: '佔用公共資金與木石' },
   field: { groups: '業主家庭與受雇農工', short: '施工期間不增糧', risk: '下次收成才增產；肥力下降、需輪作' },
@@ -85,15 +97,38 @@ export class Ui {
         this.roadTiles = [];
         this.scene.setRoadPreview([{ x, y }]);
       } else {
-        const p = findPath(map as unknown as MapState, this.anchor.x, this.anchor.y, x, y);
-        if (!p) this.store.toast('這兩點之間沒有路徑', 'warn');
-        else {
-          this.roadTiles = p.steps
-            .map((i) => ({ x: i % map.w, y: Math.floor(i / map.w) }))
-            .filter((t) => map.road[t.y * map.w + t.x] === 0 && map.water[t.y * map.w + t.x] === 0 && map.occ[t.y * map.w + t.x] === 0 && t.x >= 24 && t.x < 72 && t.y >= 24 && t.y < 72)
-            .slice(0, 60);
-          this.scene.setRoadPreview(this.roadTiles);
+        const rm = this.mode.kind === 'road' ? this.mode.mode : 'dirt';
+        const idx = (t: { x: number; y: number }): number => t.y * map.w + t.x;
+        let tiles: { x: number; y: number }[];
+        if (rm === 'bridge' || rm === 'stonebridge') {
+          // 橋：兩點之間的直線格（水面或既有木橋）
+          tiles = [];
+          const dx = Math.sign(x - this.anchor.x);
+          const dy = Math.sign(y - this.anchor.y);
+          let cx = this.anchor.x;
+          let cy = this.anchor.y;
+          for (let k = 0; k < 60; k++) {
+            tiles.push({ x: cx, y: cy });
+            if (cx === x && cy === y) break;
+            if (cx !== x) cx += dx;
+            else cy += dy;
+          }
+        } else {
+          const p = findPath(map as unknown as MapState, this.anchor.x, this.anchor.y, x, y);
+          tiles = p ? p.steps.map((i) => ({ x: i % map.w, y: Math.floor(i / map.w) })) : [];
+          if (!p) this.store.toast('這兩點之間沒有路徑', 'warn');
         }
+        this.roadTiles = tiles
+          .filter((t) => {
+            const i = idx(t);
+            if (map.occ[i] !== 0) return false;
+            if (rm === 'dirt') return map.road[i] === 0 && map.water[i] === 0 && t.x >= 24 && t.x < 72 && t.y >= 24 && t.y < 72;
+            if (rm === 'stone') return map.road[i] === 1;
+            if (rm === 'bridge') return map.water[i] !== 0 && map.road[i] === 0;
+            return map.road[i] === 3;
+          })
+          .slice(0, 60);
+        this.scene.setRoadPreview(this.roadTiles);
       }
     } else if (this.mode.kind === 'zone') {
       if (!this.anchor) this.anchor = { x, y };
@@ -246,6 +281,20 @@ export class Ui {
     sheet.classList.toggle('compact', this.tab === 'build' && this.mode.kind !== 'select');
     sheet.innerHTML = html;
     sheet.scrollTop = scroll;
+    if (this.tab === 'history' && this.sub.history === 'maps') this.drawSnaps(s);
+  }
+
+  private drawSnaps(s: Snapshot): void {
+    const colors = ['#3b78b5', '#6fae52', '#2f6b2f', '#b08d57', '#c0392b'];
+    for (const cv of document.querySelectorAll<HTMLCanvasElement>('canvas[data-snap]')) {
+      const m = s.mapSnaps.slice(-4)[Number(cv.dataset.snap)];
+      const c = cv.getContext('2d');
+      if (!m || !c) continue;
+      m.grid.forEach((v, i) => {
+        c.fillStyle = colors[v] ?? '#000';
+        c.fillRect((i % 24) * 4, Math.floor(i / 24) * 4, 4, 4);
+      });
+    }
   }
 
   private tabs(name: string, items: [string, string][]): string {
@@ -291,9 +340,12 @@ export class Ui {
     let btn = '';
     if (opt.mode.kind === 'road') {
       const n = this.roadTiles.length;
-      const wood = n * ECON.road.dirtWood;
-      const pd = n * ECON.road.dirtPersonDays;
-      rows.push(['格數', `${n}`], ['公共成本', `${pd * wage + wood * s.prices[1]!} 文（工資 ${pd * wage}）`], ['所需物資', `木材 ${wood}（庫存 ${s.pub.stock[1]}）`], ['施工人日', `${pd}`]);
+      const rm = opt.mode.mode;
+      const U = ECON.upgrade;
+      const wood = n * (rm === 'dirt' ? ECON.road.dirtWood : rm === 'bridge' ? U.bridge.wood : 0);
+      const stone = n * (rm === 'stone' ? U.stoneRoad.stone : rm === 'stonebridge' ? U.bridge.stoneStone : 0);
+      const pd = n * (rm === 'dirt' ? ECON.road.dirtPersonDays : rm === 'stone' ? U.stoneRoad.personDays : rm === 'bridge' ? U.bridge.personDays : U.bridge.stonePersonDays);
+      rows.push(['格數', `${n}`], ['公共成本', `${pd * wage + wood * s.prices[1]! + stone * s.prices[2]!} 文（工資 ${pd * wage}）`], ['所需物資', `木材 ${wood}／石材 ${stone}（庫存 ${s.pub.stock[1]}／${s.pub.stock[2]}）`], ['施工人日', `${pd}`]);
       ok = n > 0 && s.pub.cash >= pd * wage;
       btn = `data-act="do:road"`;
     } else if (opt.mode.kind === 'place') {
@@ -366,6 +418,11 @@ export class Ui {
       h += `<h4>${esc(hh.name)}</h4><div class="kv"><span>家族帳戶</span><span>${hh.cash} 文</span><span>存糧</span><span>${hh.stock[0]}（${Math.floor(hh.stock[0]! / Math.max(1, hh.memberIds.length))} 日）</span><span>家具</span><span>${hh.stock[4]}</span></div>`;
       const members = s.npcs.filter((n) => n.householdId === hh.id);
       h += `<table>${members.map((n) => `<tr><td>${esc(n.name)}${n.id === L.leaderId ? ' ★' : ''}</td><td>${n.age} 歲</td><td>${this.jobText(s, n)}</td><td><button class="btn" data-act="npc:${n.id}">看</button></td></tr>`).join('')}</table>`;
+      h += `<h4>家族世系與傳記</h4>` + members.map((n) => {
+        const parents = n.id ? s.npcs.filter((p) => p.householdId === hh.id && p.id !== n.id && p.age > n.age + 14).map((p) => p.name) : [];
+        const spouse = s.npcs.find((p) => p.id === n.spouseId);
+        return `<details class="card"><summary>${esc(n.name)}（${n.age}）${spouse ? ' ♥ ' + esc(spouse.name) : ''}${parents.length ? ' · 長輩：' + esc(parents.join('、')) : ''}</summary>${n.bio.length ? `<ul class="timeline">${n.bio.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : '<div class="muted">尚無記錄。</div>'}</details>`;
+      }).join('');
       const adults = members.filter((n) => n.age >= 18);
       if (L.playerIsLeader && adults.length) {
         h += `<h4>繼承人候選</h4><div class="row"><select data-act="heir">${adults.map((n) => `<option value="${n.id}" ${n.id === L.heirId ? 'selected' : ''}>${esc(n.name)}（${n.age}）</option>`).join('')}</select><button class="btn" data-act="heir-set">指定</button></div><div class="muted">領袖死亡且支持度 ≥ 50 時由繼承人繼任；否則舉行改選。</div>`;
@@ -438,6 +495,8 @@ export class Ui {
       case 'agriSubsidy': return `每季每塊農田 ${val} 文，年支出約 ${val * 3 * s.enterprises.filter((e) => e.kind === 'farm').length} 文；取消補助的不滿會大於當初給予的好感。`;
       case 'mintPerSeason': return `每季發行 ${val} 文。貨幣增加快於產出會使物價上漲。`;
       case 'leaderSalaryMonthly': return val > 60 ? `高於基準 60 的 ${val - 60} 文會降低支持度。` : '不高於基準。';
+      case 'educationBudget': return val ? `每季 ${val} 文付給學堂教師；需先蓋學堂。孩子成年後才見成果（技能成長）。` : '停止後學堂不運作。';
+      case 'healthBudget': return val ? `每季 ${val} 文付給診所人員；需先蓋診所。疫病時病程減半、死亡率下降。` : '停止後診所不運作。';
       case 'workRelief': return val ? '公共帳戶有餘裕時雇用無業者做公共雜役（工資取最低生活費）。' : '關閉後無業者只能自行覓食或靠救濟。';
       default: return '';
     }
@@ -462,7 +521,7 @@ export class Ui {
 
   // 歷史 ----------------------------------------------------------
   private historyPanel(s: Snapshot): string {
-    const tabs = this.tabs('history', [['events', '年表'], ['leaders', '領袖'], ['people', '人物'], ['seasons', '季報']]);
+    const tabs = this.tabs('history', [['events', '年表'], ['leaders', '領袖'], ['people', '人物'], ['firms', '企業'], ['maps', '地圖'], ['seasons', '季報']]);
     let h = `<h3>歷史</h3>${tabs}`;
     const sub = this.sub.history;
     if (sub === 'leaders') {
@@ -471,7 +530,13 @@ export class Ui {
       const l = s.npcs.find((n) => n.id === s.leadership.leaderId);
       h += `<div class="card">現任：${esc(l?.name ?? '—')}（任期自第 ${Math.floor(s.leadership.termStartTick / 360) + 1} 年）</div>`;
     } else if (sub === 'people') {
-      h += s.tombstones.length ? `<table>${[...s.tombstones].reverse().map((t) => `<tr><td>${esc(t.name)}</td><td>${Math.floor(t.birthTick / 360) + 1}–${Math.floor(t.deathTick / 360) + 1} 年</td><td>${esc(s.households.find((x) => x.id === t.householdId)?.name ?? '')}</td></tr>`).join('')}</table>` : '<p class="muted">還沒有人過世。</p>';
+      h += s.tombstones.length ? [...s.tombstones].reverse().map((t) => `<details class="card"><summary>${esc(t.name)}&emsp;${Math.floor(t.birthTick / 360) + 1}–${Math.floor(t.deathTick / 360) + 1} 年&emsp;${esc(s.households.find((x) => x.id === t.householdId)?.name ?? '')}</summary>${t.bio.length ? `<ul class="timeline">${t.bio.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : '<div class="muted">沒有記錄的生平。</div>'}</details>`).join('') : '<p class="muted">還沒有人過世。</p>';
+    } else if (sub === 'firms') {
+      const fe = s.events.filter((e) => /^Enterprise|^Strategy/.test(e.type));
+      h += fe.length ? `<ul class="timeline">${[...fe].reverse().map((e) => `<li class="imp${e.importance}">${this.when(e.tick)}&emsp;${esc(e.summary)}</li>`).join('')}</ul>` : '<p class="muted">企業沿革：目前沒有開業、轉型或結業。</p>';
+      h += `<h4>現有企業</h4><table>${s.enterprises.map((e) => `<tr><td>${BUILDING_LABEL[s.buildings.find((b) => b.id === e.buildingId)?.type ?? ''] ?? ''}</td><td>${esc(s.households.find((x) => x.id === e.ownerHouseholdId)?.name ?? '公有')}</td><td>${e.employeeIds.length} 人</td><td>${e.active ? '運作' : '停工'}</td></tr>`).join('')}</table>`;
+    } else if (sub === 'maps') {
+      h += s.mapSnaps.length ? `<div class="row">${s.mapSnaps.slice(-4).map((m, i) => `<div><canvas data-snap="${i}" width="96" height="96" style="width:120px;height:120px;image-rendering:pixelated;border:1px solid var(--line)"></canvas><div class="muted">第 ${Math.floor(m.tick / 360) + 1} 年</div></div>`).join('')}</div><div class="muted">每 5 年一張：藍＝水、綠＝草地、深綠＝森林、褐＝道路、紅＝建築。</div>` : '<p class="muted">第 5 年才會有第一張地圖對照。</p>';
     } else if (sub === 'seasons') {
       h += s.seasonSummary.length ? `<ul class="timeline">${[...s.seasonSummary].reverse().map((x) => `<li>${esc(x.text)}</li>`).join('')}</ul>` : '<p class="muted">第一個季末會出現季報。</p>';
     } else {
@@ -517,8 +582,20 @@ export class Ui {
       const emps = e ? s.npcs.filter((n) => e.employeeIds.includes(n.id)) : [];
       el.innerHTML = `<div class="row"><b class="big">${BUILDING_LABEL[b.type] ?? b.type}</b><span class="muted">${b.state === 'active' ? '運作中' : '施工中'} · ${owner ? esc(owner.name) : '公有'}</span><button class="btn" data-act="card-close">×</button></div>
       ${e ? `<div class="kv"><span>員工</span><span>${emps.map((n) => esc(n.name)).join('、') || '無'}</span><span>資金</span><span>${e.cash} 文</span><span>庫存</span><span>${COMMODITIES.map((c, i) => (e.stock[i] ? `${c}${e.stock[i]}` : '')).filter(Boolean).join(' ') || '空'}</span>${b.type === 'field' ? `<span>肥力</span><span>${e.fertility}${e.fallow ? '（休耕中）' : ''}</span>` : ''}</div>` : ''}
-      ${b.type === 'home' || b.type === 'publichome' ? `<div class="kv"><span>住戶</span><span>${esc(s.households.find((x) => x.homeId === b.id)?.name ?? '空屋')}</span></div>` : ''}`;
+      ${b.type === 'home' || b.type === 'publichome' ? `<div class="kv"><span>住戶</span><span>${esc(s.households.find((x) => x.homeId === b.id)?.name ?? '空屋')}</span></div>` : ''}
+      ${this.upgradeRow(s, b)}`;
     }
+  }
+
+  private upgradeRow(s: Snapshot, b: Snapshot['buildings'][number]): string {
+    const list = b.type === 'field' ? ECON.upgrade.field : b.type === 'home' || b.type === 'publichome' ? ECON.upgrade.home : null;
+    if (!list || b.state !== 'active') return '';
+    const cfg = list[b.stage] as { wood: number; stone: number; personDays: number } | undefined;
+    const names = b.type === 'field' ? ['荒地→耕作', '耕作→灌溉'] : ['茅屋→木屋', '木屋→街屋'];
+    if (!cfg) return `<div class="muted">已是最高階段。</div>`;
+    const busy = s.works.some((w) => w.kind === 'upgrade' && w.buildingId === b.id);
+    const perm = s.leadership.playerIsLeader && s.leadership.mode === 0;
+    return `<div class="row"><button class="btn primary" data-act="upgrade:${b.id}" ${perm && !busy ? '' : 'disabled'}>升級 ${names[b.stage]}</button><span class="muted">木${cfg.wood} 石${cfg.stone}，${cfg.personDays} 人日，約 ${cfg.personDays * s.wages[5]! + cfg.wood * s.prices[1]! + cfg.stone * s.prices[2]!} 文${busy ? '（施工中）' : ''}</span></div>`;
   }
 
   // ---------- 事件處理 ----------
@@ -601,6 +678,7 @@ export class Ui {
       case 'stand': void this.cmd('StandForElection', {}, '已參選'); break;
       case 'switch': void this.cmd('SwitchFamily', { householdId: Number(p1) }, '已接手新家族'); break;
       case 'invest': void this.cmd('SetPersonalChoice', { kind: 'invest', enterpriseId: Number(p1), amount: Number(p2) }, '已注資'); break;
+      case 'upgrade': void this.cmd('UpgradeBuilding', { buildingId: Number(p1) }, '升級已排入施工'); break;
       case 'order': void this.cmd('OrderImport', { nodeId: this.order.node, item: this.order.item, qty: this.order.qty }, '已下單，貨物在途'); break;
       case 'npc': this.openNpc(Number(p1)); break;
       case 'follow': this.scene.follow(Number(p1)); this.store.toast('鏡頭追蹤中，拖曳地圖可取消'); break;
@@ -624,7 +702,7 @@ export class Ui {
     const s = this.store.snap;
     if (!s) return;
     let ok = false;
-    if (kind === 'road') ok = await this.cmd('BuildRoad', { tiles: this.roadTiles }, '道路已排入施工');
+    if (kind === 'road') ok = await this.cmd('BuildRoad', { tiles: this.roadTiles, mode: this.mode.kind === 'road' ? this.mode.mode : 'dirt' }, '道路已排入施工');
     else if (kind === 'place' && this.mode.kind === 'place' && this.anchor) ok = await this.cmd('PlaceBuilding', { type: this.mode.type, x: this.anchor.x, y: this.anchor.y }, '已排入施工');
     else if (kind === 'zone' && this.mode.kind === 'zone' && this.anchor && this.rect) {
       const a = this.anchor;

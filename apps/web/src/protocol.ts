@@ -46,6 +46,7 @@ export interface NpcView {
   commute: number;
   spouseId: number;
   sex: number;
+  bio: string[];
 }
 
 export interface Snapshot {
@@ -79,6 +80,7 @@ export interface Snapshot {
   nodes: Pick<TradeNode, 'id' | 'name' | 'basePrice' | 'drift' | 'transitDays' | 'capacity'>[];
   shipments: Shipment[];
   effects: { type: string; untilTick: number; value: number }[];
+  mapSnaps: { tick: number; grid: number[] }[];
   mapKey: string;
 }
 

@@ -198,6 +198,20 @@
       "wood": 20,
       "stone": 0,
       "personDays": 20
+    },
+    "school": {
+      "w": 3,
+      "h": 2,
+      "wood": 30,
+      "stone": 15,
+      "personDays": 35
+    },
+    "clinic": {
+      "w": 2,
+      "h": 2,
+      "wood": 25,
+      "stone": 10,
+      "personDays": 30
     }
   },
   "npc": {
@@ -237,5 +251,66 @@
       2,
       1
     ]
+  },
+  "upgrade": {
+    "home": [
+      {
+        "wood": 40,
+        "stone": 10,
+        "personDays": 30,
+        "capacity": 6,
+        "moodBonus": 3
+      },
+      {
+        "wood": 30,
+        "stone": 40,
+        "personDays": 50,
+        "capacity": 8,
+        "moodBonus": 6
+      }
+    ],
+    "field": [
+      {
+        "wood": 10,
+        "stone": 0,
+        "personDays": 25,
+        "fertilityBonus": 10,
+        "lossReduce": 1
+      },
+      {
+        "wood": 20,
+        "stone": 20,
+        "personDays": 40,
+        "yieldBonusPermille": 100,
+        "lossReduce": 1
+      }
+    ],
+    "stoneRoad": {
+      "stone": 1,
+      "personDays": 1
+    },
+    "bridge": {
+      "wood": 6,
+      "personDays": 6,
+      "stoneStone": 6,
+      "stonePersonDays": 8
+    }
+  },
+  "edu": {
+    "skillGainPerYear": 3,
+    "ages": [
+      6,
+      15
+    ],
+    "budgetPerSeasonMax": 200,
+    "mortalityHalfWithClinic": true
+  },
+  "enterprise": {
+    "foundCost": 300,
+    "foundMinCash": 2000,
+    "lossSeasonsCut": 2,
+    "lossSeasonsStop": 4,
+    "stopSeasonsExit": 2,
+    "liquidatePermille": 500
   }
 }

@@ -6,6 +6,7 @@ import { inBounds, tileIdx } from './map.js';
 import { nextInt } from './prng.js';
 import { FOOD, type Household, type Npc, type WorldState } from './types.js';
 import { bldOf, entOf, hhOf, isAdult, npcOf, removeFrom } from './util.js';
+import { clinicActive } from './society.js';
 
 type Template = (typeof EVENTS.templates)[number];
 
@@ -120,7 +121,7 @@ function triggerEvent(w: WorldState, t: Template): void {
     case 'flood': {
       let lost = 0;
       for (let i = 0; i < w.map.road.length; i++) {
-        if (w.map.road[i]! >= 1 && w.map.road[i]! <= 2 && nextInt(w.prng, 1000) < t.roadLossPermille!) {
+        if (w.map.road[i]! >= 1 && w.map.road[i]! !== 4 && nextInt(w.prng, 1000) < t.roadLossPermille!) {
           w.map.road[i] = 0;
           lost++;
         }
@@ -161,11 +162,12 @@ function triggerEvent(w: WorldState, t: Template): void {
       break;
     }
     case 'epidemic': {
+      w.lastEpidemicTick = w.tick;
       const adults = w.npcs.filter(isAdult);
       let n = 0;
       for (let i = 0; i < t.victims! && adults.length; i++) {
         const v = adults.splice(nextInt(w.prng, adults.length), 1)[0]!;
-        v.illnessUntil = until;
+        v.illnessUntil = clinicActive(w) ? w.tick + Math.ceil(t.durationDays / 2) : until;
         v.health = Math.max(20, v.health - 10);
         n++;
       }
@@ -253,7 +255,7 @@ export function immigrate(w: WorldState, forced: boolean): boolean {
       health: 95, hunger: 0, energy: 80, mood: 65, skills: i < 2 ? [sk(), sk(), sk(), sk()] : [5, 5, 5, 5], traits: [nextInt(w.prng, 3), 3 + nextInt(w.prng, 3)],
       riskPreference: 20 + nextInt(w.prng, 60), jobKind: 0, jobId: 0, jobSince: 0, cooldownUntil: 0, unemployedWeeks: 0, leisure: 0, commute: 0, equipped: 0,
       workDaysWeek: 0, arrears: 0, lastSector: -1, x: 0, y: 0, state: 0, reason: '', controller: 'ai', interestGroup: 3, satisfaction: 60, satisfactionBaseline: 60,
-      lastFactor: 600, relations: [], tags: [], spouseId: 0, parentIds: [], illnessUntil: 0,
+      lastFactor: 600, relations: [], tags: [], spouseId: 0, parentIds: [], illnessUntil: 0, bio: [],
     };
     w.npcs.push(n);
     hh.memberIds.push(id);
@@ -272,7 +274,7 @@ export function emigrate(w: WorldState, n: Npc, reason: string): void {
   const i = w.npcs.findIndex((x) => x.id === n.id);
   if (i >= 0) w.npcs.splice(i, 1);
   for (const o of w.npcs) o.relations = o.relations.filter((r) => r.targetId !== n.id);
-  w.tombstones.push({ id: n.id, name: n.name, birthTick: n.birthTick, deathTick: w.tick, householdId: n.householdId, keyEventIds: [] });
+  w.tombstones.push({ id: n.id, name: n.name, birthTick: n.birthTick, deathTick: w.tick, householdId: n.householdId, keyEventIds: [], parentIds: [...n.parentIds], bio: [...n.bio] });
   pushEvent(w, { type: 'MigrationCompleted', importance: 2, causeIds: [], actorIds: [n.id], summary: `${hh?.name ?? ''}的 ${n.name} ${reason}前往河港謀生`, data: { dir: 'out', householdId: n.householdId } });
 }
 

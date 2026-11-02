@@ -164,6 +164,7 @@ function makeNpc(w: WorldState, hh: Household, age: number, role: 'adult' | 'eld
     spouseId: 0,
     parentIds: [],
     illnessUntil: 0,
+    bio: [],
   };
 }
 
@@ -215,6 +216,8 @@ export function createWorld(seed: number, family = 0): WorldState {
       leaderSalaryMonthly: 60,
       roadPriority: 0,
       workRelief: 1,
+      educationBudget: 0,
+      healthBudget: 0,
       pending: [],
     },
     settlement: {
@@ -249,6 +252,8 @@ export function createWorld(seed: number, family = 0): WorldState {
     eventLog: [],
     benefits: [],
     seasonSummary: [],
+    mapSnaps: [],
+    lastEpidemicTick: -1000,
   };
 
   // 建築（公共與各戶）
