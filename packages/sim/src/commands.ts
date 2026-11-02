@@ -3,7 +3,7 @@ import { ECON } from '@ss/content';
 import {
   holdElection, nominateHeir, respondProposal, roadCost, setPolicy, switchFamily,
 } from './civic.js';
-import { PUBLIC_SECTOR, bumpMapVersion, materialsValue, queueWork, reserveMaterials } from './econ.js';
+import { PUBLIC_SECTOR, bumpMapVersion, cancelWork, materialsValue, queueWork, reserveMaterials } from './econ.js';
 import { pushEvent } from './history.js';
 import { inBuildZone, tileIdx, validatePlacement, inBounds } from './map.js';
 import { addBuilding } from './start.js';
@@ -174,6 +174,16 @@ export function applyCommand(w: WorldState, cmd: Command): CommandResult {
       const id = num(p, 'householdId');
       const r = switchFamily(w, id ?? -1);
       if (!r.ok) return reject(cmd, r.reason);
+      w.version++;
+      return accept(cmd);
+    }
+    case 'CancelWork': {
+      const perm = needLeader(w);
+      if (perm) return reject(cmd, perm);
+      const id = num(p, 'workId');
+      const wk = w.works.find((x) => x.id === id);
+      if (!wk || wk.state > 1 || wk.kind === 'maintenance') return reject(cmd, 'unknown_project');
+      cancelWork(w, wk);
       w.version++;
       return accept(cmd);
     }

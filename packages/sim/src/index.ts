@@ -5,7 +5,7 @@ export * from './hash.js';
 export * from './types.js';
 export * from './world.js';
 export { findPath, tileCost, pathCost, commuteFx } from './path.js';
-export { validatePlacement, ZONE_MIN, ZONE_MAX, tileIdx, inBuildZone } from './map.js';
+export { validatePlacement, footprintOf, ZONE_MIN, ZONE_MAX, tileIdx, inBuildZone } from './map.js';
 export { satisfactionStep, favoritismRatioFx, roadCost } from './civic.js';
 export { householdStats, unemployedCount, workforce, marginalValue } from './econ.js';
 export { nodePrice } from './trade.js';

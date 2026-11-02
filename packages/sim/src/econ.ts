@@ -276,6 +276,26 @@ export function reserveMaterials(w: WorldState, wk: PublicWork): void {
   if (wk.needed.every((n, i) => wk.reserved[i]! >= n)) wk.state = 1;
 }
 
+/** 撤銷尚未完工的工程：預約材料退回公共庫存，藍圖拆除，工人釋出（GDD 10：建設支援撤銷）。 */
+export function cancelWork(w: WorldState, wk: PublicWork): void {
+  wk.state = 3;
+  for (let i = 0; i < NCOMM; i++) {
+    w.settlement.public.stock[i]! += wk.reserved[i]!;
+    wk.reserved[i] = 0;
+  }
+  for (const n of w.npcs) if (n.jobKind === 2 && n.jobId === wk.id) releaseJob(w, n, '工程撤銷');
+  if (wk.buildingId) {
+    const bi = w.buildings.findIndex((b) => b.id === wk.buildingId);
+    if (bi >= 0) {
+      const b = w.buildings[bi]!;
+      for (let yy = b.y; yy < b.y + b.h; yy++) for (let xx = b.x; xx < b.x + b.w; xx++) w.map.occ[tileIdx(w.map, xx, yy)] = 0;
+      w.buildings.splice(bi, 1);
+      bumpMapVersion(w, b.x, b.y);
+    }
+  }
+  pushEvent(w, { type: 'WorkCancelled', importance: 1, causeIds: [], actorIds: [], summary: '工程已撤銷，材料退回公共庫存', data: { workId: wk.id } });
+}
+
 export function completeWork(w: WorldState, wk: PublicWork): void {
   wk.state = 2;
   for (let i = 0; i < NCOMM; i++) w.stats.consumed[i]! += wk.reserved[i]!;

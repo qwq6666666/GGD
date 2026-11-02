@@ -4,33 +4,41 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#2f3b2a" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; worker-src 'self' blob:" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <title>生生之境</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <header id="top">
-      <div class="place">生生村</div>
-      <div id="date">—</div>
-      <div id="stats"></div>
-      <div id="speed" role="group" aria-label="速度">
-        <button data-speed="pause" aria-label="暫停">⏸</button>
-        <button data-speed="normal" aria-label="正常">▶</button>
-        <button data-speed="fast" aria-label="快速">⏩</button>
-        <button data-speed="max" aria-label="極速">⏭</button>
+      <div class="row1">
+        <div class="place">生生村</div>
+        <div id="date" aria-live="polite">—</div>
+        <div id="speed" role="group" aria-label="速度">
+          <button data-speed="pause" aria-label="暫停">⏸</button>
+          <button data-speed="normal" aria-label="正常">▶</button>
+          <button data-speed="fast" aria-label="快速">⏩</button>
+          <button data-speed="max" aria-label="極速">⏭</button>
+        </div>
       </div>
+      <div id="stats"></div>
     </header>
-    <main id="map" aria-label="地圖（A3 前為除錯畫面）">
-      <pre id="debug"></pre>
+    <main id="map" aria-label="地圖">
+      <div id="hint" hidden></div>
+      <div id="zoom"><button data-zoom="in" aria-label="放大">＋</button><button data-zoom="out" aria-label="縮小">－</button></div>
+      <div id="toasts" aria-live="polite"></div>
     </main>
+    <section id="card" hidden></section>
+    <section id="sheet" hidden></section>
     <nav id="bottom">
-      <button disabled>建設</button>
-      <button disabled>提案</button>
-      <button disabled>家族</button>
-      <button disabled>世界</button>
-      <button id="btn-save">存檔</button>
+      <button data-tab="build">建設</button>
+      <button data-tab="proposals">提案<span id="badge" hidden></span></button>
+      <button data-tab="family">家族</button>
+      <button data-tab="world">世界</button>
+      <button data-tab="history">歷史</button>
     </nav>
+    <div id="modal" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

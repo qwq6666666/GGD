@@ -19,7 +19,8 @@ export const playerHousehold = (w: WorldState): Household | undefined => hhOf(w,
 // ---------- 提案 ----------
 
 function openProposalFor(w: WorldState, kind: Proposal['kind'], proposerHh: number): boolean {
-  return w.proposals.some((p) => (p.status === 0 || p.status === 2) && p.kind === kind && (kind !== 'road' || npcOf(w, p.proposerId)?.householdId === proposerHh));
+  // 開啟中，或同一家庭 90 日內才被處理／過期的同類提案（避免重複洗版）
+  return w.proposals.some((p) => p.kind === kind && (kind !== 'road' || npcOf(w, p.proposerId)?.householdId === proposerHh) && (p.status === 0 || p.status === 2 || p.createdTick > w.tick - 90));
 }
 
 function highThisSeason(w: WorldState): number {

@@ -1,78 +1,78 @@
 import { parseSave } from '@ss/persistence';
+import { startGame } from './game/MapScene.js';
 import { IndexedDbSaveStore } from './idb-store.js';
-import type { FromWorker, Speed, ToWorker, WorldView } from './protocol.js';
+import type { ToWorker } from './protocol.js';
+import { Store } from './store.js';
+import { Ui } from './ui.js';
 
-const $ = <T extends HTMLElement>(sel: string): T => document.querySelector(sel) as T;
-const worker = new Worker(new URL('./sim.worker.ts', import.meta.url), { type: 'module' });
-const send = (m: ToWorker): void => worker.postMessage(m);
-const store = new IndexedDbSaveStore();
 const SLOT = 'main';
-const log: string[] = [];
+const store = new Store(new Worker(new URL('./sim.worker.ts', import.meta.url), { type: 'module' }));
+const saves = new IndexedDbSaveStore();
+const send = (m: ToWorker): void => store.send(m);
 
-function render(view: WorldView, speed: Speed): void {
-  $('#date').textContent = view.date;
-  // 主畫面最多 3 個摘要狀態，其一固定為支持度（GDD 10）。
-  $('#stats').textContent = `支持度 ${view.support} · 天氣 ${view.weather ? '雨' : '晴'}`;
-  for (const b of document.querySelectorAll<HTMLButtonElement>('#speed button')) {
-    b.setAttribute('aria-pressed', String(b.dataset.speed === speed));
-  }
-  // textContent 只輸出純文字，不渲染任何 HTML（GDD 13 安全）。
-  $('#debug').textContent = [
-    `tick ${view.tick} · world v${view.version}`,
-    `hash ${view.hash}`,
-    '',
-    '近期事件：',
-    ...view.recentEvents,
-    '',
-    '訊息：',
-    ...log.slice(-6),
-  ].join('\n');
-}
-
-worker.onmessage = (ev: MessageEvent<FromWorker>) => {
-  const m = ev.data;
-  switch (m.kind) {
-    case 'view':
-      render(m.view, m.speed);
-      break;
-    case 'saved':
-      void store.write(SLOT, m.text).then(() => log.push(`已存檔（${m.reason}）`));
-      break;
-    case 'commandResult':
-      log.push(`命令 #${m.result.commandId}：${m.result.status}${m.result.status === 'rejected' ? `（${m.result.reason}）` : ''}`);
-      break;
-    case 'error':
-      log.push(`錯誤：${m.message}`);
-      break;
-  }
+store.onSaved = (text) => {
+  void saves.write(SLOT, text).catch(() => store.toast('存檔失敗（儲存空間不足或被封鎖）', 'warn'));
+};
+store.onExport = (text) => {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `shengsheng-${store.snap?.year ?? 0}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
-for (const b of document.querySelectorAll<HTMLButtonElement>('#speed button')) {
-  b.addEventListener('click', () => send({ kind: 'speed', speed: b.dataset.speed as Speed }));
-}
-$('#btn-save').addEventListener('click', () => send({ kind: 'save' }));
-
-// 關閉或進入背景即暫停並存檔，不做離線追趕（GDD 12）。
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') send({ kind: 'speed', speed: 'pause' });
-});
-
-async function boot(): Promise<void> {
-  const saves = await store.list(SLOT).catch(() => []);
-  // 由新到舊找第一個能通過驗證的恢復點。
-  const valid = saves.find((t) => {
+async function latestValidSave(): Promise<string | null> {
+  const list = await saves.list(SLOT).catch(() => [] as string[]);
+  // 由新到舊找第一個能通過驗證的恢復點
+  for (const t of list) {
     try {
       parseSave(t);
-      return true;
+      return t;
     } catch {
-      return false;
+      /* 損毀的恢復點略過 */
     }
+  }
+  return null;
+}
+
+async function boot(): Promise<void> {
+  const holder: { ui: Ui | null } = { ui: null };
+  const scene = await startGame(document.querySelector('#map') as HTMLElement, {
+    onTapTile: (x, y) => holder.ui?.onTapTile(x, y),
+    onSelectNpc: (id) => holder.ui?.onSelectNpc(id),
+    onSelectBuilding: (id) => holder.ui?.onSelectBuilding(id),
+    selecting: () => holder.ui?.mode.kind !== 'place' && holder.ui?.mode.kind !== 'road' && holder.ui?.mode.kind !== 'zone',
   });
-  send(valid ? { kind: 'init', seed: 0, saveText: valid } : { kind: 'init', seed: 20261103 });
+  const ui = new Ui(store, scene);
+  holder.ui = ui;
+  ui.loadSettings();
+  store.subscribeMap(() => store.map && scene.setMap(store.map));
+  store.subscribe(() => store.snap && scene.setSnapshot(store.snap));
+  ui.onImport = (text) => {
+    try {
+      parseSave(text);
+      send({ kind: 'init', seed: 0, family: 0, saveText: text });
+      store.toast('已匯入存檔', 'good');
+    } catch (e) {
+      store.toast(`匯入失敗：${e instanceof Error ? e.message.slice(0, 60) : '格式錯誤'}`, 'warn');
+    }
+  };
+  const startNew = (): void => {
+    ui.showFamilySelect(false, (family) => send({ kind: 'init', seed: (Date.now() & 0x7fffffff) >>> 0, family }), () => {});
+  };
+  ui.onNewGame = () => {
+    if (confirm('確定放棄目前進度，重新開始？（舊存檔仍會保留 3 個恢復點）')) startNew();
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') send({ kind: 'speed', speed: 'pause' });
+  });
+  const last = await latestValidSave();
+  if (last) {
+    ui.showFamilySelect(true, (family) => send({ kind: 'init', seed: (Date.now() & 0x7fffffff) >>> 0, family }), () => send({ kind: 'init', seed: 0, family: 0, saveText: last }));
+  } else startNew();
+  if ('serviceWorker' in navigator && import.meta.env.PROD) void navigator.serviceWorker.register('/sw.js');
+  (window as unknown as { __ss: { store: Store; ui: Ui } }).__ss = { store, ui };
 }
 
 void boot();
-
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  void navigator.serviceWorker.register('/sw.js');
-}

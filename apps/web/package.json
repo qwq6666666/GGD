@@ -9,10 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ss/sim": "workspace:*",
-    "@ss/schema": "workspace:*",
+    "@ss/content": "workspace:*",
     "@ss/persistence": "workspace:*",
-    "@ss/content": "workspace:*"
+    "@ss/schema": "workspace:*",
+    "@ss/sim": "workspace:*",
+    "phaser": "3.90.0"
   },
   "devDependencies": {
     "vite": "6.4.1"

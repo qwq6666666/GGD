@@ -27,6 +27,7 @@ export const COMMAND_TYPES = [
   'StandForElection',
   'SwitchFamily',
   'OrderImport',
+  'CancelWork',
 ] as const;
 
 export const GenericCommandSchema = CommandBaseSchema.extend({

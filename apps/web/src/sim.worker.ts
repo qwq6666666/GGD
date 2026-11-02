@@ -1,8 +1,9 @@
 import type { Command } from '@ss/schema';
 import { CALIBRATION } from '@ss/content';
 import { createSave, parseSave, serializeSave } from '@ss/persistence';
-import { createWorld, formatDate, stateHash, step, submitCommand, type WorldState } from '@ss/sim';
+import { applyPendingNow, createWorld, step, submitCommand, type WorldState } from '@ss/sim';
 import type { FromWorker, Speed, ToWorker } from './protocol.js';
+import { buildSnapshot } from './snapshot.js';
 
 /** Worker 全域的最小型別（避免 DOM 與 WebWorker lib 衝突）。 */
 const ctx = globalThis as unknown as {
@@ -16,6 +17,8 @@ let nextCommandId = 1;
 let speed: Speed = 'pause';
 let owedMs = 0;
 let lastTime = 0;
+let lastMapKey = '';
+const refs = new Map<number, number>();
 
 const post = (m: FromWorker): void => ctx.postMessage(m);
 
@@ -30,19 +33,13 @@ function msPerDay(s: Speed): number {
 
 function pushView(): void {
   if (!world) return;
-  post({
-    kind: 'view',
-    speed,
-    view: {
-      tick: world.tick,
-      date: formatDate(world.tick),
-      weather: world.env.weather,
-      support: world.leadership.support,
-      version: world.version,
-      hash: stateHash(world),
-      recentEvents: world.eventLog.slice(-5).map((e) => `${formatDate(e.tick)} ${e.type}`),
-    },
-  });
+  const snap = buildSnapshot(world);
+  if (snap.mapKey !== lastMapKey) {
+    lastMapKey = snap.mapKey;
+    const m = world.map;
+    post({ kind: 'map', key: snap.mapKey, map: { w: m.w, h: m.h, height: m.height, soil: m.soil, forest: m.forest, water: m.water, stone: m.stone, road: m.road, occ: m.occ } });
+  }
+  post({ kind: 'snapshot', snap, speed });
 }
 
 function save(reason: 'manual' | 'season' | 'background'): void {
@@ -53,12 +50,20 @@ function save(reason: 'manual' | 'season' | 'background'): void {
 function advanceOneDay(): void {
   if (!world) return;
   const before = world.eventLog.length;
-  const r = step(world, { checkInvariants: import.meta.env.DEV });
-  for (const result of r.commandResults) post({ kind: 'commandResult', result });
+  const r = step(world, { checkInvariants: import.meta.env.DEV && world.tick % 30 === 0 });
+  for (const result of r.commandResults) {
+    const ref = refs.get(result.commandId) ?? -1;
+    refs.delete(result.commandId);
+    post({ kind: 'commandResult', ref, result });
+  }
   const newEvents = world.eventLog.slice(before);
   if (newEvents.some((e) => e.type === 'SeasonEnded')) save('season');
-  // 重大事件自動降速（GDD 8.3）：僅影響排程層。
-  if (newEvents.some((e) => e.importance >= 3) && (speed === 'fast' || speed === 'max')) speed = 'normal';
+  // 重大事件與玩家家族的出生／成年／婚姻／重病／死亡／改選一律自動降回正常速度（GDD 2.0、8.3）
+  const big = newEvents.find((e) => e.importance >= 3);
+  if (big && (speed === 'fast' || speed === 'max')) {
+    speed = 'normal';
+    post({ kind: 'alert', text: big.summary });
+  }
 }
 
 function tick(): void {
@@ -83,16 +88,18 @@ ctx.onmessage = (ev: MessageEvent<ToWorker>) => {
   try {
     switch (msg.kind) {
       case 'init': {
+        lastMapKey = '';
         if (msg.saveText) {
           const loaded = parseSave(msg.saveText);
           world = loaded.world;
           commandLog = loaded.save.commandLog;
           nextCommandId = commandLog.reduce((m, c) => Math.max(m, c.commandId), 0) + 1;
         } else {
-          world = createWorld(msg.seed);
+          world = createWorld(msg.seed, msg.family);
           commandLog = [];
           nextCommandId = 1;
         }
+        speed = 'pause';
         lastTime = performance.now();
         pushView();
         break;
@@ -105,24 +112,47 @@ ctx.onmessage = (ev: MessageEvent<ToWorker>) => {
         break;
       case 'command': {
         if (!world) break;
-        const command: Command = {
+        const command = {
           commandId: nextCommandId++,
           issuedTick: world.tick,
           expectedWorldVersion: world.version,
           type: msg.type,
           payload: msg.payload,
-        };
+        } as Command;
+        refs.set(command.commandId, msg.ref);
         submitCommand(world, command);
         commandLog.push(command);
+        if (speed === 'pause') {
+          advanceCommandsWhilePaused();
+        }
         break;
       }
       case 'save':
         save('manual');
+        break;
+      case 'exportSave':
+        if (world) post({ kind: 'export', text: serializeSave(createSave(world, commandLog)) });
         break;
     }
   } catch (e) {
     post({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
   }
 };
+
+/**
+ * 暫停時玩家仍可下命令（建設、提案）。命令在 issuedTick 當日套用；暫停時世界不推進，
+ * 因此這裡把命令視為「下一日開頭」套用：推進一日但不經過時間排程。為避免暫停時時間流逝，
+ * 命令改由 sim 的 applyCommand 直接處理（見 sim 的 applyPendingNow）。
+ */
+function advanceCommandsWhilePaused(): void {
+  if (!world) return;
+  const results = applyPendingNow(world);
+  for (const result of results) {
+    const ref = refs.get(result.commandId) ?? -1;
+    refs.delete(result.commandId);
+    post({ kind: 'commandResult', ref, result });
+  }
+  pushView();
+}
 
 setInterval(tick, 50);

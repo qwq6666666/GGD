@@ -46,6 +46,14 @@ function phaseCommands(world: WorldState): CommandResult[] {
   });
 }
 
+/**
+ * 暫停時立即處理已到期的命令（與 step 的第 1 步完全相同），世界時間不前進。
+ * 重播時命令在同一 tick 的 step 開頭套用，結果一致。
+ */
+export function applyPendingNow(world: WorldState): CommandResult[] {
+  return phaseCommands(world);
+}
+
 function seasonSummaryText(w: WorldState): string {
   const d = toDate(w.tick);
   const names = ['春', '夏', '秋', '冬'];

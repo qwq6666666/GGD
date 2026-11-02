@@ -70,6 +70,20 @@ describe('A1：地圖、尋路、命令', () => {
     expect(w.works.some((x) => x.kind === 'road')).toBe(true);
   });
 
+  it('撤銷工程：材料退回、藍圖拆除、帳務守恆', () => {
+    const w = createWorld(5);
+    const home = w.buildings.find((x) => x.type === 'home')!;
+    const free = [{ x: home.ex, y: home.ey + 1 }].filter((t) => w.map.road[tileIdx(w.map, t.x, t.y)] === 0 && w.map.occ[tileIdx(w.map, t.x, t.y)] === 0);
+    submitCommand(w, cmd(w, 'BuildRoad', { tiles: free }, 1));
+    step(w);
+    const wk = w.works.find((x) => x.kind === 'road')!;
+    const wood = w.settlement.public.stock[1]! + wk.reserved[1]!;
+    submitCommand(w, cmd(w, 'CancelWork', { workId: wk.id }, 2));
+    expect(step(w, { checkInvariants: true }).commandResults[0]!.status).toBe('accepted');
+    expect(w.settlement.public.stock[1]!).toBeGreaterThanOrEqual(wood - 5);
+    expect(w.works.find((x) => x.id === wk.id)!.state).toBe(3);
+  });
+
   it('缺糧會求助：存糧歸零的家戶得到親友或公共救濟', () => {
     const w = createWorld(5);
     const h = w.households[2]!;
