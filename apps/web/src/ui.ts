@@ -312,7 +312,9 @@ export class Ui {
       sheet.hidden = true;
       return;
     }
-    const key = `${this.tab}|${this.sub[this.tab] ?? ''}|${s.tick}|${this.mode.kind}|${this.anchor?.x},${this.anchor?.y}|${this.roadTiles.length}`;
+    // 暫停時 tick 不變，因此把提案與工程狀態也納入，命令生效後才會重畫
+    const sig = `${s.proposals.map((p) => `${p.id}.${p.status}`).join(',')}|${s.works.length}|${s.pub.cash}`;
+    const key = `${this.tab}|${this.sub[this.tab] ?? ''}|${s.tick}|${sig}|${this.mode.kind}|${this.anchor?.x},${this.anchor?.y}|${this.roadTiles.length}`;
     if (!force && key === this.lastSheetKey) return;
     // 滑桿或輸入框操作中不重繪，避免打斷
     if (!force && document.activeElement && sheet.contains(document.activeElement) && (document.activeElement as HTMLElement).tagName === 'INPUT') return;
