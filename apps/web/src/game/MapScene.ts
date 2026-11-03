@@ -13,6 +13,7 @@ export interface SceneHooks {
   onSelectNpc(id: number): void;
   onSelectBuilding(id: number): void;
   onCameraMove?(): void;
+  onClock?(label: string): void;
   /** 目前是否為一般選取模式；建設模式下點擊一律當作點格子。 */
   selecting(): boolean;
 }
@@ -87,6 +88,11 @@ export class MapScene extends Phaser.Scene {
   private lastTick = -1;
   private dayMs = 3000;
   private spawnAcc = 0;
+  /** 暫停時時鐘與天色一起停住 */
+  paused = false;
+  /** 純顯示的時鐘（毫秒）；一個循環 45 秒＝24 小時，開局為早上 7 點 */
+  private clockMs = (19 / 24) * 45000;
+  private lastClockLabel = '';
 
   constructor() {
     super('map');
@@ -478,6 +484,19 @@ export class MapScene extends Phaser.Scene {
     }
   }
 
+  /** phase 0 為正午、0.5 為午夜；換算成鐘點並回報給 UI（以 10 分鐘為單位） */
+  private emitClock(phase: number): void {
+    const h = (phase * 24 + 12) % 24;
+    const m = Math.floor(((h % 1) * 60) / 10) * 10;
+    const hh = Math.floor(h);
+    const icon = h >= 5 && h < 6.5 ? '🌅' : h >= 6.5 && h < 17 ? '☀' : h >= 17 && h < 19 ? '🌇' : '🌙';
+    const label = `${icon} ${String(hh).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    if (label !== this.lastClockLabel) {
+      this.lastClockLabel = label;
+      this.hooks.onClock?.(label);
+    }
+  }
+
   /** 每幀：人物走路與工作動作、頭上圖示、晝夜、煙、雲影、飛鳥、水面閃光、工地揚塵。 */
   override update(time: number, delta: number): void {
     const s = this.snap;
@@ -485,6 +504,8 @@ export class MapScene extends Phaser.Scene {
     const fx = this.fx;
     fx.clear();
     if (this.reduceMotion) {
+      if (!this.paused) this.clockMs += delta;
+      this.emitClock((this.clockMs / 45000) % 1);
       this.night.setAlpha(0);
       for (const t of Object.values(this.emotes)) t.setVisible(false);
       return;
@@ -558,7 +579,9 @@ export class MapScene extends Phaser.Scene {
       } else if (t) t.setVisible(false);
     }
     // --- 晝夜（45 秒一個循環，純顯示） ---
-    const phase = (time / 45000) % 1;
+    if (!this.paused) this.clockMs += delta;
+    const phase = (this.clockMs / 45000) % 1;
+    this.emitClock(phase);
     const dark = Math.max(0, Math.sin(phase * Math.PI * 2 - Math.PI / 2) * 0.5 + 0.5 - 0.45) / 0.55; // 0..1，夜晚為 1
     const dusk = Math.max(0, 1 - Math.abs(dark - 0.35) * 4) * (phase > 0.5 ? 1 : 0.6);
     this.night.setPosition(cam.width / 2, cam.height / 2);

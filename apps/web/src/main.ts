@@ -42,6 +42,10 @@ async function boot(): Promise<void> {
     onTapTile: (x, y) => holder.ui?.onTapTile(x, y),
     onSelectNpc: (id) => holder.ui?.onSelectNpc(id),
     onSelectBuilding: (id) => holder.ui?.onSelectBuilding(id),
+    onClock: (label) => {
+      const el = document.querySelector('#clock');
+      if (el) el.textContent = label;
+    },
     selecting: () => holder.ui?.mode.kind !== 'place' && holder.ui?.mode.kind !== 'road' && holder.ui?.mode.kind !== 'zone',
   });
   const ui = new Ui(store, scene);

@@ -30,6 +30,7 @@ button { font: inherit; color: var(--text); cursor: pointer; }
 .row1 { display: flex; align-items: center; gap: 8px; }
 .place { font-weight: 700; white-space: nowrap; font-size: .95em; }
 #date { flex: 1; font-size: 0.85em; opacity: 0.95; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#clock { font-variant-numeric: tabular-nums; margin-left: 4px; }
 #speed { display: flex; gap: 4px; }
 #speed button { min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px; background: var(--panel2); font-size: 1.05em; }
 #speed button[aria-pressed='true'] { background: var(--accent); color: #1f261c; }

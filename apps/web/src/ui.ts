@@ -347,7 +347,8 @@ export class Ui {
   }
 
   private renderTop(s: Snapshot): void {
-    (document.querySelector('#date') as HTMLElement).textContent = `${s.date} ${s.weather ? '🌧' : '☀'}`;
+    (document.querySelector('#dt') as HTMLElement).textContent = `${s.date}${s.weather ? ' 🌧' : ''}`;
+    this.scene.paused = this.store.speed === 'pause';
     for (const b of document.querySelectorAll<HTMLButtonElement>('#speed button')) b.setAttribute('aria-pressed', String(b.dataset.speed === this.store.speed));
     const last = s.supportLog[s.supportLog.length - 1];
     const prev = s.supportLog[s.supportLog.length - 2];
