@@ -40,9 +40,10 @@ export function planAuto(w: WorldState): AutoAction[] {
     if (p.status !== 0 && p.status !== 2) continue;
     const needWood = p.materials[1] ?? 0;
     const needStone = p.materials[2] ?? 0;
-    if (cash - p.cost >= RESERVE && woodLeft >= needWood && stoneLeft >= needStone) {
+    // 工資是隨工程進度逐日支付，不是一次扣完，所以只要求先備齊約六成成本
+    if (cash - Math.floor(p.cost * 0.6) >= RESERVE && woodLeft >= needWood && stoneLeft >= needStone) {
       out.push({ type: 'RespondProposal', payload: { proposalId: p.id, response: 'approve' }, note: `✔ 核准提案 #${p.id}` });
-      cash -= p.cost;
+      cash -= Math.floor(p.cost * 0.6);
       woodLeft -= needWood;
       stoneLeft -= needStone;
     } else if (p.status === 0) {

@@ -80,6 +80,7 @@
     "perWood": 4
   },
   "reliefReserve": 800,
+  "granarySale": { "keepDays": 70, "weeklyMax": 120, "minBatch": 40, "discountPermille": 200, "cashCeiling": 12000, "driftStep": 50 },
   "wage": {
     "min": 20,
     "start": [

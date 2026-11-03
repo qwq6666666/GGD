@@ -40,6 +40,33 @@ export function orderImport(w: WorldState, nodeId: number, item: number, qty: nu
   return { ok: true };
 }
 
+/**
+ * 常平倉賣出盈餘：公共糧倉在「保留天數」之外的糧食，每週最多賣一批給出價最高的貿易節點，
+ * 價格打折，賣出會壓低節點糧價；貨幣與商品都記入帳本，出口計入 stats.exported（ADR-0010）。
+ * 公庫已經寬裕（高於 cashCeiling）時不賣，避免無謂壓低節點價格。
+ */
+export function granaryAutoSell(w: WorldState): void {
+  const G = ECON.granarySale;
+  const pub = w.settlement.public;
+  if (pub.cash >= G.cashCeiling || w.nodes.length === 0) return;
+  // 乾旱期間或預警中不賣，糧倉是防災的最後一道線
+  if (w.env.yieldPermille < 1000 || w.env.effects.some((e) => e.type === 'drought' && e.untilTick > w.tick) || w.env.warnings.some((x) => x.type === 'drought')) return;
+  const keep = w.npcs.length * G.keepDays;
+  const surplus = pub.stock[0]! - keep;
+  const qty = Math.min(surplus, G.weeklyMax);
+  if (qty < G.minBatch) return;
+  let best = w.nodes[0]!;
+  for (const n of w.nodes) if (nodePrice(w, n.id, 0) > nodePrice(w, best.id, 0)) best = n;
+  const unit = Math.max(1, Math.floor((nodePrice(w, best.id, 0) * (1000 - G.discountPermille)) / 1000));
+  const q = Math.min(qty, best.capacity, Math.floor(best.cash / unit));
+  if (q < G.minBatch) return;
+  if (!transferMoney(w, 'n' + best.id, 'p', unit * q, 'granary-sale')) return;
+  pub.stock[0]! -= q;
+  w.stats.exported[0]! += q;
+  best.drift[0] = Math.max(-400, best.drift[0]! - Math.floor((q * G.driftStep) / 100));
+  pushEvent(w, { type: 'GranarySold', importance: 1, causeIds: [], actorIds: [], summary: `糧倉盈餘賣給${best.name} ${q} 糧，得 ${unit * q} 文`, data: { nodeId: best.id, qty: q } });
+}
+
 /** 每日：到期的在途貨物入庫。 */
 export function dailyShipments(w: WorldState): void {
   for (const s of w.shipments) {

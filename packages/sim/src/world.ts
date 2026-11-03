@@ -16,7 +16,7 @@ import { compactLedger, totalGoods, totalMoney } from './ledger.js';
 import { dailyDeaths, monthlyDemography, yearlyAging } from './npc.js';
 import { chance65536 } from './prng.js';
 import { updateProgress } from './progress.js';
-import { dailyShipments, weeklyNodeRecovery } from './trade.js';
+import { dailyShipments, granaryAutoSell, weeklyNodeRecovery } from './trade.js';
 import { foundEnterprises, seasonEnterpriseReview, weeklyDiffusion, seasonalServices, snapshotMap, yearlyEducation } from './society.js';
 import type { WorldState } from './types.js';
 import { NCOMM } from './types.js';
@@ -74,6 +74,7 @@ function weekly(w: WorldState): void {
   adjustWages(w);
   weeklyRelief(w);
   weeklyNodeRecovery(w);
+  granaryAutoSell(w);
   generateProposals(w);
   if (w.leadership.mode === 1) aiLeaderRespond(w);
   foundEnterprises(w);
