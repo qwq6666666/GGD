@@ -79,6 +79,7 @@
     "regenPermilleOfK": 2,
     "perWood": 4
   },
+  "reliefReserve": 800,
   "wage": {
     "min": 20,
     "start": [

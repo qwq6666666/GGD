@@ -14,7 +14,9 @@ export interface AutoAction {
   note: string;
 }
 
-const RESERVE = 1200;
+/** 核准提案時公庫要留的底；蓋新東西時留更多，讓提案優先 */
+const RESERVE = 400;
+const BUILD_RESERVE = 1500;
 const BUILD_CFG = ECON.build as Record<string, { wood: number; stone: number; personDays: number }>;
 
 /** 每週最後一日（tick % 6 === 5）規劃；呼叫端每天最多送出一項，避免世界版本衝突。 */
@@ -77,7 +79,7 @@ export function planAuto(w: WorldState): AutoAction[] {
     const wage = w.settlement.wage[5] ?? 0;
     const place = (type: BuildingType, nx: number, ny: number, label: string): AutoAction | null => {
       const cfg = BUILD_CFG[type === 'publichome' ? 'home' : type === 'school' || type === 'clinic' ? 'storage' : type];
-      if (!cfg || cash - cfg.personDays * wage < RESERVE || woodLeft < cfg.wood || stoneLeft < cfg.stone) return null;
+      if (!cfg || cash - cfg.personDays * wage < BUILD_RESERVE || woodLeft < cfg.wood || stoneLeft < cfg.stone) return null;
       const spot = findSpot(w.map, w.buildings, type, nx, ny);
       return spot ? { type: 'PlaceBuilding', payload: { type, x: spot.x, y: spot.y }, note: label } : null;
     };
@@ -125,7 +127,7 @@ function roadAction(w: WorldState, cash: number, woodLeft: number, wage: number)
       }
       if (tiles.length < 2) continue;
       const c = roadCost(w, tiles.length);
-      if (cash - c.pd * wage < RESERVE || woodLeft < (c.materials[1] ?? 0)) continue;
+      if (cash - c.pd * wage < BUILD_RESERVE || woodLeft < (c.materials[1] ?? 0)) continue;
       return { type: 'BuildRoad', payload: { mode: 'dirt', tiles }, note: `🟫 鋪路 ${tiles.length} 格` };
     }
   }
@@ -140,7 +142,7 @@ function stoneRoadAction(w: WorldState, cash: number, stoneLeft: number, wage: n
   }
   if (tiles.length < 5) return null;
   const c = roadCost(w, tiles.length, 'stone');
-  if (cash - c.pd * wage < RESERVE || stoneLeft < (c.materials[2] ?? 0)) return null;
+  if (cash - c.pd * wage < BUILD_RESERVE || stoneLeft < (c.materials[2] ?? 0)) return null;
   return { type: 'BuildRoad', payload: { mode: 'stone', tiles }, note: `🪨 升級石路 ${tiles.length} 格` };
 }
 

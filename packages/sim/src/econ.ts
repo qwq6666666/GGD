@@ -212,6 +212,8 @@ export function dailyWork(w: WorldState): void {
     let idx = 0;
     for (const n of w.npcs) {
       if (n.jobKind !== 2 || n.jobId !== wk.id || !canWork(w, n)) continue;
+      // 以工代賑不得把公庫花光：低於保底線就停發雜役工資，錢留給提案與工程（ADR-0009）
+      if (wk.kind === 'maintenance' && w.settlement.public.cash < ECON.reliefReserve) continue;
       const wage = wk.kind === 'maintenance' ? ECON.wage.min : w.settlement.wage[PUBLIC_SECTOR]!;
       if (!transferMoney(w, 'p', 'h' + n.householdId, wage, 'wage:work' + wk.id)) {
         n.reason = '公共帳戶無力支付工資';
