@@ -57,6 +57,8 @@ export class Ui {
   settings = { fs: 15, reduce: false };
   private lastSheetKey = '';
   private dragging = false;
+  /** 已回應但命令尚未生效的提案（一般速度要等下一個遊戲日），先從清單隱藏 */
+  private answered: Record<number, boolean> = {};
   private tutStep = 0;
   private tutSeen = false;
   private order = { node: 1, item: 0, qty: 50 };
@@ -100,67 +102,84 @@ export class Ui {
     });
   }
 
-  /** 提案卡左右滑：右＝核准、左＝拒絕；滑動距離不足則彈回。 */
+  /** 提案卡左右滑：右＝核准、左＝拒絕；距離不足或不夠快則彈回。 */
   private bindSwipe(sheet: HTMLElement): void {
     let card: HTMLElement | null = null;
+    let pid = -1;
     let x0 = 0;
     let y0 = 0;
+    let t0 = 0;
     let dx = 0;
     let moved = false;
-    const TH = 90;
+    const reset = (c: HTMLElement | null): void => {
+      if (!c) return;
+      c.style.transition = 'transform .18s ease-out';
+      c.style.transform = '';
+      c.classList.remove('dr', 'dl', 'go');
+    };
     sheet.addEventListener('pointerdown', (e) => {
       const c = (e.target as HTMLElement).closest('.pcard') as HTMLElement | null;
       if (!c || (e.target as HTMLElement).closest('button,summary,select,input')) return;
       card = c;
+      pid = e.pointerId;
       x0 = e.clientX;
       y0 = e.clientY;
+      t0 = e.timeStamp;
       dx = 0;
       moved = false;
+      this.dragging = true; // 手指按著時不重畫，否則卡片被換掉手勢就斷了
+      try {
+        c.setPointerCapture(e.pointerId);
+      } catch { /* 部分瀏覽器不支援，忽略 */ }
     });
     sheet.addEventListener('pointermove', (e) => {
-      if (!card) return;
+      if (!card || e.pointerId !== pid) return;
       const mx = e.clientX - x0;
       const my = e.clientY - y0;
-      if (!moved && Math.abs(mx) < 8) return;
-      if (!moved && Math.abs(my) > Math.abs(mx)) {
-        card = null; // 垂直捲動
-        return;
+      if (!moved) {
+        if (Math.abs(mx) < 6 && Math.abs(my) < 6) return;
+        if (Math.abs(my) > Math.abs(mx) * 1.4) {
+          // 明顯是往上下捲動，放棄滑動
+          card = null;
+          this.dragging = false;
+          return;
+        }
       }
       moved = true;
-      this.dragging = true;
       dx = mx;
       card.style.transition = 'none';
       card.style.transform = `translateX(${dx}px) rotate(${dx / 25}deg)`;
       card.classList.toggle('dr', dx > 24);
       card.classList.toggle('dl', dx < -24);
-      card.classList.toggle('go', Math.abs(dx) >= TH);
+      card.classList.toggle('go', Math.abs(dx) >= this.swipeThreshold(card));
       if (card.dataset.perm !== '1') card.classList.add('noperm');
     });
-    const end = (): void => {
+    const end = (e: PointerEvent): void => {
       const c = card;
+      if (!c || e.pointerId !== pid) return;
       card = null;
-      if (!c || !moved) {
-        this.dragging = false;
-        return;
-      }
-      const pid = c.dataset.pid;
-      const act = dx >= TH ? 'approve' : dx <= -TH ? 'reject' : '';
+      this.dragging = false;
+      if (!moved) return;
+      const dt = Math.max(1, e.timeStamp - t0);
+      const flick = Math.abs(dx) >= 40 && Math.abs(dx) / dt > 0.5; // 快速甩動也算
+      const act = e.type === 'pointercancel' ? '' : Math.abs(dx) >= this.swipeThreshold(c) || flick ? (dx > 0 ? 'approve' : 'reject') : '';
       if (act && c.dataset.perm === '1') {
         c.style.transition = 'transform .18s ease-out, opacity .18s';
         c.style.transform = `translateX(${dx > 0 ? 500 : -500}px) rotate(${dx > 0 ? 20 : -20}deg)`;
         c.style.opacity = '0';
-        this.dragging = false;
-        void this.cmd('RespondProposal', { proposalId: Number(pid), response: act }, act === 'approve' ? '✔ 已核准' : '✖ 已拒絕');
+        this.respond(Number(c.dataset.pid), act);
       } else {
-        c.style.transition = 'transform .18s ease-out';
-        c.style.transform = '';
-        c.classList.remove('dr', 'dl', 'go');
-        this.dragging = false;
+        reset(c);
         if (act) this.store.toast('🔒 目前不是領袖', 'warn');
       }
     };
     sheet.addEventListener('pointerup', end);
     sheet.addEventListener('pointercancel', end);
+  }
+
+  /** 約卡片寬度的 22%，介於 60 到 110 像素 */
+  private swipeThreshold(card: HTMLElement): number {
+    return Math.min(110, Math.max(60, card.offsetWidth * 0.22));
   }
 
   private setTut(n: number): void {
@@ -385,7 +404,7 @@ export class Ui {
     }
     // 暫停時 tick 不變，因此把提案與工程狀態也納入，命令生效後才會重畫
     const sig = `${s.proposals.map((p) => `${p.id}.${p.status}`).join(',')}|${s.works.length}|${s.pub.cash}`;
-    const key = `${this.tab}|${this.sub[this.tab] ?? ''}|${s.tick}|${sig}|${this.mode.kind}|${this.anchor?.x},${this.anchor?.y}|${this.roadTiles.length}`;
+    const key = `${this.tab}|${this.sub[this.tab] ?? ''}|${this.tab === 'proposals' ? 0 : s.tick}|${sig}|${this.mode.kind}|${this.anchor?.x},${this.anchor?.y}|${this.roadTiles.length}`;
     if (!force && key === this.lastSheetKey) return;
     if (!force && this.dragging) return; // 滑動提案時不重畫，避免打斷手勢
     // 滑桿或輸入框操作中不重繪，避免打斷
@@ -504,7 +523,10 @@ export class Ui {
     if (!s.proposals.length) return `<p class="muted">📭 沒有提案&emsp;${tag('👥', s.leadership.support)}${tag('🌾', s.stats.foodDays)}</p>`;
     const perm = s.leadership.playerIsLeader && s.leadership.mode === 0;
     // 一次一張：待決優先、高優先在前、快到期的在前；延後過的排最後
-    const list = [...s.proposals].sort((a, b) => (a.status === 2 ? 1 : 0) - (b.status === 2 ? 1 : 0) || b.priority - a.priority || a.expiry - b.expiry);
+    for (const k of Object.keys(this.answered)) if (!s.proposals.some((p) => p.id === Number(k))) delete this.answered[Number(k)];
+    const shown = s.proposals.filter((p) => !this.answered[p.id]);
+    if (!shown.length) return `<p class="muted">📭 沒有提案&emsp;${tag('👥', s.leadership.support)}${tag('🌾', s.stats.foodDays)}</p>`;
+    const list = [...shown].sort((a, b) => (a.status === 2 ? 1 : 0) - (b.status === 2 ? 1 : 0) || b.priority - a.priority || a.expiry - b.expiry);
     const p = list[0]!;
     const who = s.npcs.find((n) => n.id === p.proposerId);
     const hh = who ? s.households.find((x) => x.id === who.householdId) : undefined;
@@ -807,6 +829,19 @@ export class Ui {
   onImport: (text: string) => void = () => {};
   onNewGame: () => void = () => {};
 
+  /** 回應提案：先在畫面上換下一張，命令失敗再還原。 */
+  private respond(id: number, response: string): void {
+    this.answered[id] = true;
+    this.lastSheetKey = '';
+    window.setTimeout(() => this.renderSheet(true), response === 'defer' ? 0 : 200);
+    void this.cmd('RespondProposal', { proposalId: id, response }, response === 'approve' ? '✔ 已核准' : response === 'defer' ? '⏳ 已延後' : '✖ 已拒絕').then((ok) => {
+      if (!ok) {
+        delete this.answered[id];
+        this.renderSheet(true);
+      }
+    });
+  }
+
   private async cmd(type: string, payload: Record<string, unknown>, okText: string): Promise<boolean> {
     const r = await this.store.command(type, payload);
     if (r.status === 'rejected') {
@@ -833,7 +868,7 @@ export class Ui {
       case 'locked': this.store.toast(`🔒 ${this.lockLabel(p1!)}：村子成長後解鎖（🎯）`, 'warn'); break;
       case 'do': void this.doBuild(p1!); break;
       case 'cancel': void this.cmd('CancelWork', { workId: Number(p1) }, '↩ 已撤銷'); break;
-      case 'prop': void this.cmd('RespondProposal', { proposalId: Number(p1), response: p2 }, p2 === 'approve' ? '✔ 已核准' : p2 === 'defer' ? '⏳ 已延後' : '✖ 已拒絕'); break;
+      case 'prop': this.respond(Number(p1), p2!); break;
       case 'policy': {
         const k = p1!;
         void this.cmd('SetPolicy', { key: k, value: this.draft[k] }, '⌛ 下季生效').then((ok) => {
