@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { findPath, type MapState } from '@ss/sim';
 import type { MapData, NpcView, Snapshot } from '../protocol.js';
 
 export const T = 16;
@@ -30,6 +31,33 @@ function hash2(x: number, y: number): number {
   return (h ^ (h >>> 15)) >>> 0;
 }
 
+interface Walker {
+  /** 邏輯位置（像素）；顯示位置再加上走路／工作的晃動 */
+  x: number;
+  y: number;
+  path: { x: number; y: number }[];
+  speed: number;
+  tx: number;
+  ty: number;
+  state: number;
+  emoteAt: number;
+  flip: boolean;
+}
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+  life: number;
+  r: number;
+  color: number;
+  alpha: number;
+}
+
+const TOOL_EMOJI: Record<string, string> = { farm: '🌾', lumber: '🪓', quarry: '⛏', toolshop: '🔧', furnshop: '🪑' };
+
 export class MapScene extends Phaser.Scene {
   hooks!: SceneHooks;
   reduceMotion = false;
@@ -48,6 +76,17 @@ export class MapScene extends Phaser.Scene {
   private dragging = false;
   private pinchDist = 0;
   private followId = 0;
+  // ---- 純顯示層動畫（不進模擬狀態，不影響決定性與存檔） ----
+  private walkers: Record<number, Walker> = {};
+  private fx!: Phaser.GameObjects.Graphics;
+  private night!: Phaser.GameObjects.Rectangle;
+  private emotes: Record<number, Phaser.GameObjects.Text> = {};
+  private particles: Particle[] = [];
+  private waterTiles: number[] = [];
+  private lastTickAt = 0;
+  private lastTick = -1;
+  private dayMs = 3000;
+  private spawnAcc = 0;
 
   constructor() {
     super('map');
@@ -86,6 +125,8 @@ export class MapScene extends Phaser.Scene {
     this.bGfx = this.add.graphics();
     this.overlay = this.add.graphics().setDepth(50);
     this.rain = this.add.graphics().setDepth(60);
+    this.fx = this.add.graphics().setDepth(24);
+    this.night = this.add.rectangle(0, 0, 8000, 8000, 0x0b1a3a, 0).setDepth(45).setScrollFactor(0);
     const cam = this.cameras.main;
     cam.setBackgroundColor(0x1f261c);
     cam.setZoom(1.3);
@@ -164,11 +205,19 @@ export class MapScene extends Phaser.Scene {
 
   setMap(map: MapData): void {
     this.map = map;
+    this.waterTiles = [];
+    for (let i = 0; i < map.water.length; i++) if (map.water[i]) this.waterTiles.push(i);
     if (this.terrain) this.drawTerrain();
   }
 
   setSnapshot(snap: Snapshot): void {
     const first = !this.snap;
+    if (snap.tick !== this.lastTick) {
+      const now = performance.now();
+      if (this.lastTick >= 0 && snap.tick > this.lastTick) this.dayMs = Phaser.Math.Clamp(this.dayMs * 0.6 + ((now - this.lastTickAt) / (snap.tick - this.lastTick)) * 0.4, 40, 3200);
+      this.lastTickAt = now;
+      this.lastTick = snap.tick;
+    }
     this.snap = snap;
     if (!this.terrain) return;
     if (this.terrainKey !== `${snap.season}|${snap.mapKey}`) this.drawTerrain();
@@ -367,25 +416,224 @@ export class MapScene extends Phaser.Scene {
     const s = this.snap;
     if (!s) return;
     const alive: Record<number, boolean> = {};
+    const mapState = this.map as unknown as MapState | null;
     for (const n of s.npcs) {
       alive[n.id] = true;
       let sp = this.npcSprites[n.id];
       const px = n.x * T + 8 + ((n.id * 7) % 9) - 4;
       const py = n.y * T + 10 + ((n.id * 5) % 7) - 3;
       const key = `npc-${n.interestGroup}-${n.age < 16 ? 1 : 0}-${n.controller === 'player' ? 1 : 0}`;
-      if (!sp) {
-        sp = this.add.image(px, py, key).setDepth(20).setOrigin(0.5, 0.7);
+      let wk = this.walkers[n.id];
+      if (!sp || !wk) {
+        sp = sp ?? this.add.image(px, py, key).setDepth(20).setOrigin(0.5, 0.7);
         this.npcSprites[n.id] = sp;
+        wk = { x: px, y: py, path: [], speed: 0, tx: n.x, ty: n.y, state: n.state, emoteAt: 2000 + ((n.id * 937) % 6000), flip: false };
+        this.walkers[n.id] = wk;
       } else if (sp.texture.key !== key) sp.setTexture(key);
       sp.setAlpha(n.hunger > 70 ? 0.55 : 1);
-      if (this.reduceMotion) sp.setPosition(px, py);
-      else this.tweens.add({ targets: sp, x: px, y: py, duration: 350, ease: 'Sine.easeInOut' });
+      wk.state = n.state;
+      if (this.reduceMotion) {
+        wk.x = px;
+        wk.y = py;
+        wk.path = [];
+        sp.setPosition(px, py);
+        wk.tx = n.x;
+        wk.ty = n.y;
+        continue;
+      }
+      if (wk.tx !== n.x || wk.ty !== n.y) {
+        // 目的地改變：沿道路走過去。速度快時只直線趨近，避免大量尋路。
+        const pts: { x: number; y: number }[] = [];
+        const fx0 = Math.floor(wk.x / T);
+        const fy0 = Math.floor(wk.y / T);
+        const far = Math.abs(fx0 - n.x) + Math.abs(fy0 - n.y) > 70;
+        if (mapState && this.dayMs >= 250 && !far) {
+          const p = findPath(mapState, Phaser.Math.Clamp(fx0, 0, mapState.w - 1), Phaser.Math.Clamp(fy0, 0, mapState.h - 1), n.x, n.y);
+          if (p) for (const i of p.steps) pts.push({ x: (i % mapState.w) * T + 8 + ((n.id * 3) % 5) - 2, y: Math.floor(i / mapState.w) * T + 10 });
+        }
+        pts.push({ x: px, y: py });
+        let len = 0;
+        let lx = wk.x;
+        let ly = wk.y;
+        for (const q of pts) {
+          len += Math.hypot(q.x - lx, q.y - ly);
+          lx = q.x;
+          ly = q.y;
+        }
+        wk.path = pts;
+        // 一天的 85% 時間內走完；至少每秒 14 像素，避免慢吞吞
+        wk.speed = Math.max(14, len / (Math.max(250, this.dayMs * 0.85) / 1000));
+        wk.tx = n.x;
+        wk.ty = n.y;
+      }
     }
     for (const id of Object.keys(this.npcSprites).map(Number)) {
       if (!alive[id]) {
         this.npcSprites[id]!.destroy();
         delete this.npcSprites[id];
+        delete this.walkers[id];
+        this.emotes[id]?.destroy();
+        delete this.emotes[id];
       }
+    }
+  }
+
+  /** 每幀：人物走路與工作動作、頭上圖示、晝夜、煙、雲影、飛鳥、水面閃光、工地揚塵。 */
+  override update(time: number, delta: number): void {
+    const s = this.snap;
+    if (!s || !this.terrain) return;
+    const fx = this.fx;
+    fx.clear();
+    if (this.reduceMotion) {
+      this.night.setAlpha(0);
+      for (const t of Object.values(this.emotes)) t.setVisible(false);
+      return;
+    }
+    const dt = Math.min(delta, 100) / 1000;
+    const cam = this.cameras.main;
+    const view = cam.worldView;
+    // --- 人物 ---
+    const toolOf = (n: NpcView): string => {
+      if (n.jobKind === 1) {
+        const e = s.enterprises.find((x) => x.id === n.jobId);
+        return e ? TOOL_EMOJI[e.kind] ?? '🔨' : '🔨';
+      }
+      return n.jobKind === 2 ? '🔨' : '';
+    };
+    for (const n of s.npcs) {
+      const sp = this.npcSprites[n.id];
+      const wk = this.walkers[n.id];
+      if (!sp || !wk) continue;
+      let ox = 0;
+      let oy = 0;
+      if (wk.path.length) {
+        const q = wk.path[0]!;
+        const dx = q.x - wk.x;
+        const dy = q.y - wk.y;
+        const d = Math.hypot(dx, dy);
+        const step = wk.speed * dt;
+        if (d <= step) {
+          wk.x = q.x;
+          wk.y = q.y;
+          wk.path.shift();
+        } else {
+          wk.x += (dx / d) * step;
+          wk.y += (dy / d) * step;
+        }
+        if (Math.abs(dx) > 0.5) wk.flip = dx < 0;
+        const ph = time / 90 + n.id;
+        oy = -Math.abs(Math.sin(ph)) * 2.2; // 走路時上下彈跳
+        ox = Math.sin(ph) * 0.6;
+      } else if (wk.state === 5) {
+        // 工作中：來回揮動
+        const ph = time / 140 + n.id * 1.7;
+        ox = Math.sin(ph) * 2.2;
+        oy = -Math.max(0, Math.sin(ph * 2)) * 1.6;
+      } else if (wk.state === 7 || n.hunger > 70) {
+        oy = Math.sin(time / 600 + n.id) * 0.5; // 休息／疲憊：緩慢起伏
+      } else {
+        // 閒置：偶爾左右踱步
+        ox = Math.sin(time / 1700 + n.id * 2.3) * 2.5;
+        oy = -Math.max(0, Math.sin(time / 330 + n.id)) * 0.8 * (Math.sin(time / 1700 + n.id * 2.3) > 0.7 ? 1 : 0);
+        if (Math.abs(Math.cos(time / 1700 + n.id * 2.3)) > 0.1) wk.flip = Math.cos(time / 1700 + n.id * 2.3) < 0;
+      }
+      sp.setPosition(wk.x + ox, wk.y + oy);
+      sp.setFlipX(wk.flip);
+      sp.setDepth(20 + wk.y / 1000);
+      // 頭上圖示
+      const visible = wk.x > view.x - 20 && wk.x < view.right + 20 && wk.y > view.y - 20 && wk.y < view.bottom + 20 && cam.zoom >= 1;
+      let icon = '';
+      if (n.hunger > 70) icon = '🍞';
+      else if (time > wk.emoteAt && time < wk.emoteAt + 1500) icon = wk.state === 7 ? '💤' : wk.state === 5 ? toolOf(n) : wk.path.length ? '' : n.mood < 35 ? '💧' : n.mood > 75 ? '♪' : '';
+      if (time > wk.emoteAt + 1500) wk.emoteAt = time + 3500 + ((n.id * 613 + Math.floor(time / 1000)) % 7000);
+      let t = this.emotes[n.id];
+      if (icon && visible) {
+        if (!t) {
+          t = this.add.text(0, 0, icon, { fontSize: '9px' }).setOrigin(0.5, 1).setDepth(30);
+          this.emotes[n.id] = t;
+        }
+        const rise = n.hunger > 70 ? Math.sin(time / 300) * 1.5 : ((time - wk.emoteAt) / 1500) * 5;
+        if (t.text !== icon) t.setText(icon);
+        t.setVisible(true).setPosition(sp.x, sp.y - 11 - rise);
+      } else if (t) t.setVisible(false);
+    }
+    // --- 晝夜（45 秒一個循環，純顯示） ---
+    const phase = (time / 45000) % 1;
+    const dark = Math.max(0, Math.sin(phase * Math.PI * 2 - Math.PI / 2) * 0.5 + 0.5 - 0.45) / 0.55; // 0..1，夜晚為 1
+    const dusk = Math.max(0, 1 - Math.abs(dark - 0.35) * 4) * (phase > 0.5 ? 1 : 0.6);
+    this.night.setPosition(cam.width / 2, cam.height / 2);
+    this.night.setFillStyle(dark > 0.2 ? 0x0b1a3a : 0xff9a3c, Math.max(dark * 0.34, dusk * 0.12));
+    // 窗戶燈光
+    if (dark > 0.25) {
+      for (const b of s.buildings) {
+        if (b.state !== 'active' || (b.type !== 'home' && b.type !== 'publichome')) continue;
+        fx.fillStyle(0xffd27a, Math.min(0.9, dark));
+        fx.fillRect(b.x * T + 4, b.y * T + b.h * T * 0.5, 3, 3);
+        fx.fillRect(b.x * T + b.w * T - 8, b.y * T + b.h * T * 0.5, 3, 3);
+        fx.fillStyle(0xffd27a, 0.14 * dark);
+        fx.fillCircle(b.x * T + (b.w * T) / 2, b.y * T + b.h * T, 20);
+      }
+    }
+    // --- 粒子：煙、揚塵 ---
+    this.spawnAcc += delta;
+    if (this.spawnAcc > 380) {
+      this.spawnAcc = 0;
+      for (const b of s.buildings) {
+        const bx = b.x * T;
+        const by = b.y * T;
+        const inView = bx > view.x - 40 && bx < view.right + 40 && by > view.y - 40 && by < view.bottom + 40;
+        if (!inView) continue;
+        if (b.state === 'active' && (b.type === 'home' || b.type === 'toolshop' || b.type === 'furnshop') && (b.id + Math.floor(time / 380)) % 3 === 0) {
+          this.particles.push({ x: bx + b.w * T - 6, y: by + 2, vx: 3 + (s.weather ? -1 : 0), vy: -9, age: 0, life: 2400, r: 2, color: 0xdddddd, alpha: 0.5 });
+        } else if (b.state !== 'active' && (b.id + Math.floor(time / 380)) % 2 === 0) {
+          this.particles.push({ x: bx + Math.random() * b.w * T, y: by + b.h * T - 2, vx: (Math.random() - 0.5) * 8, vy: -5, age: 0, life: 900, r: 2.5, color: 0xc2a574, alpha: 0.6 });
+        }
+      }
+      if (this.particles.length > 160) this.particles.splice(0, this.particles.length - 160);
+    }
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i]!;
+      p.age += delta;
+      if (p.age >= p.life) {
+        this.particles.splice(i, 1);
+        continue;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      const k = p.age / p.life;
+      fx.fillStyle(p.color, p.alpha * (1 - k));
+      fx.fillCircle(p.x, p.y, p.r * (1 + k * 1.4));
+    }
+    // --- 雲影 ---
+    const W = (this.map?.w ?? 96) * T;
+    for (let i = 0; i < 4; i++) {
+      const cx = ((time / 1000) * (5 + i * 1.5) + i * 520) % (W + 400) - 200;
+      const cy = 180 + i * 340 + Math.sin(time / 9000 + i) * 20;
+      fx.fillStyle(0x000000, s.weather ? 0.12 : 0.06);
+      fx.fillEllipse(cx, cy, 190 + i * 30, 70 + i * 10);
+    }
+    // --- 水面閃光 ---
+    if (this.waterTiles.length) {
+      const base = Math.floor(time / 450);
+      for (let k = 0; k < 14; k++) {
+        const idx = this.waterTiles[(base * 31 + k * 977) % this.waterTiles.length]!;
+        const m = this.map!;
+        const x = (idx % m.w) * T;
+        const y = Math.floor(idx / m.w) * T;
+        if (x < view.x - 16 || x > view.right || y < view.y - 16 || y > view.bottom) continue;
+        const a = Math.max(0, Math.sin(((time % 450) / 450) * Math.PI));
+        fx.fillStyle(0xffffff, 0.55 * a);
+        fx.fillRect(x + ((idx * 7) % 11), y + ((idx * 5) % 11), 3, 1);
+      }
+    }
+    // --- 飛鳥 ---
+    for (let i = 0; i < 4; i++) {
+      const bx = ((time / 1000) * (24 + i * 4) + i * 330) % (W + 200) - 100;
+      const by = 260 + i * 260 + Math.sin(time / 1300 + i * 2) * 26;
+      const flap = Math.sin(time / 90 + i * 3) * 2.5;
+      fx.lineStyle(1, 0x2b2b2b, 0.7);
+      fx.lineBetween(bx - 4, by - flap, bx, by);
+      fx.lineBetween(bx, by, bx + 4, by - flap);
     }
   }
 
