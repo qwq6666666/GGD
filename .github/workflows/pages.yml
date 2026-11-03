@@ -1,0 +1,33 @@
+name: Deploy to GitHub Pages
+# 建置後把 dist 推到 gh-pages 分支；在 Settings → Pages 選「Deploy from a branch → gh-pages / (root)」即可上線。
+on:
+  push:
+    branches: [main, claude/game-design-planning-ez4tu1]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: touch apps/web/dist/.nojekyll
+      - name: 推送到 gh-pages
+        run: |
+          cd apps/web/dist
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Deploy ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages

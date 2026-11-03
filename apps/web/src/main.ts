@@ -72,7 +72,7 @@ async function boot(): Promise<void> {
   if (last) {
     ui.showFamilySelect(true, (family) => send({ kind: 'init', seed: (Date.now() & 0x7fffffff) >>> 0, family }), () => send({ kind: 'init', seed: 0, family: 0, saveText: last }));
   } else startNew();
-  if ('serviceWorker' in navigator && import.meta.env.PROD) void navigator.serviceWorker.register('/sw.js');
+  if ('serviceWorker' in navigator && import.meta.env.PROD) void navigator.serviceWorker.register(new URL('sw.js', document.baseURI).href);
   (window as unknown as { __ss: { store: Store; ui: Ui } }).__ss = { store, ui };
 }
 
