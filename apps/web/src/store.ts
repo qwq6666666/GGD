@@ -8,6 +8,7 @@ export class Store {
   map: MapData | null = null;
   mapKey = '';
   speed: Speed = 'pause';
+  auto = false;
   toasts: { text: string; kind: 'info' | 'warn' | 'good'; at: number }[] = [];
   private listeners: Listener[] = [];
   private mapListeners: Listener[] = [];
@@ -74,6 +75,11 @@ export class Store {
         break;
       case 'export':
         this.onExport(m.text);
+        break;
+      case 'auto':
+        this.auto = m.on;
+        if (m.note) this.toast(`🤖 ${m.note}`);
+        this.emit();
         break;
       case 'alert':
         this.toast(`已自動降速：${m.text}`, 'warn');

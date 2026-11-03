@@ -17,3 +17,4 @@ export { addBuilding } from './start.js';
 export { immigrate } from './events.js';
 export { goalStatus, stageName, unlocked, applyStageZone, updateProgress, MAX_STAGE } from './progress.js';
 export type { GoalStatus } from './progress.js';
+export { planAuto, isAutoPlanDay, type AutoAction } from './auto.js';

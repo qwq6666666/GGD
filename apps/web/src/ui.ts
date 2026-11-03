@@ -73,6 +73,11 @@ export class Ui {
       const b = (e.target as HTMLElement).closest('button[data-speed]') as HTMLElement | null;
       if (b) store.send({ kind: 'speed', speed: b.dataset.speed as Speed });
     });
+    q('#auto').addEventListener('click', () => {
+      const on = !store.auto;
+      store.send({ kind: 'auto', on });
+      store.toast(on ? '🤖 自動模式開啟：電腦代為決策，你仍可手動操作' : '🤖 自動模式關閉', on ? 'good' : 'info');
+    });
     q('#zoom').addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('button[data-zoom]') as HTMLElement | null;
       if (b) scene.zoomBy(b.dataset.zoom === 'in' ? 1.25 : 0.8);
@@ -368,6 +373,7 @@ export class Ui {
   private renderTop(s: Snapshot): void {
     (document.querySelector('#dt') as HTMLElement).textContent = `${s.date}${s.weather ? ' 🌧' : ''}`;
     this.scene.paused = this.store.speed === 'pause';
+    (document.querySelector('#auto') as HTMLElement).setAttribute('aria-pressed', String(this.store.auto));
     for (const b of document.querySelectorAll<HTMLButtonElement>('#speed button')) b.setAttribute('aria-pressed', String(b.dataset.speed === this.store.speed));
     const last = s.supportLog[s.supportLog.length - 1];
     const prev = s.supportLog[s.supportLog.length - 2];

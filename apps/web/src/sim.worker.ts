@@ -1,7 +1,7 @@
 import type { Command } from '@ss/schema';
 import { CALIBRATION } from '@ss/content';
 import { createSave, parseSave, serializeSave } from '@ss/persistence';
-import { applyPendingNow, createWorld, step, submitCommand, type WorldState } from '@ss/sim';
+import { applyPendingNow, createWorld, isAutoPlanDay, planAuto, step, submitCommand, type AutoAction, type WorldState } from '@ss/sim';
 import type { FromWorker, Speed, ToWorker } from './protocol.js';
 import { buildSnapshot } from './snapshot.js';
 
@@ -18,6 +18,9 @@ let speed: Speed = 'pause';
 let owedMs = 0;
 let lastTime = 0;
 let lastMapKey = '';
+/** 電腦自動模式（排程層旗標，不進世界狀態）；命令照一般命令寫入日誌，因此回放一致 */
+let autoOn = false;
+let autoQueue: AutoAction[] = [];
 const refs = new Map<number, number>();
 
 const post = (m: FromWorker): void => ctx.postMessage(m);
@@ -47,9 +50,21 @@ function save(reason: 'manual' | 'season' | 'background'): void {
   post({ kind: 'saved', reason, text: serializeSave(createSave(world, commandLog)) });
 }
 
+/** 每週規劃一次，之後每天最多送出一項命令，避免同日世界版本衝突。 */
+function runAuto(w: WorldState): void {
+  if (isAutoPlanDay(w.tick)) autoQueue = planAuto(w);
+  const a = autoQueue.shift();
+  if (!a) return;
+  const command = { commandId: nextCommandId++, issuedTick: w.tick, expectedWorldVersion: w.version, type: a.type, payload: a.payload } as Command;
+  submitCommand(w, command);
+  commandLog.push(command);
+  post({ kind: 'auto', on: true, note: a.note });
+}
+
 function advanceOneDay(): void {
   if (!world) return;
   const before = world.eventLog.length;
+  if (autoOn) runAuto(world);
   const r = step(world, { checkInvariants: import.meta.env.DEV && world.tick % 30 === 0 });
   for (const result of r.commandResults) {
     const ref = refs.get(result.commandId) ?? -1;
@@ -89,6 +104,9 @@ ctx.onmessage = (ev: MessageEvent<ToWorker>) => {
     switch (msg.kind) {
       case 'init': {
         lastMapKey = '';
+        autoOn = false;
+        autoQueue = [];
+        post({ kind: 'auto', on: false });
         if (msg.saveText) {
           const loaded = parseSave(msg.saveText);
           world = loaded.world;
@@ -127,6 +145,11 @@ ctx.onmessage = (ev: MessageEvent<ToWorker>) => {
         }
         break;
       }
+      case 'auto':
+        autoOn = msg.on;
+        autoQueue = [];
+        post({ kind: 'auto', on: autoOn });
+        break;
       case 'save':
         save('manual');
         break;

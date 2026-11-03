@@ -8,6 +8,7 @@ export type ToWorker =
   | { kind: 'init'; seed: number; family: number; saveText?: string }
   | { kind: 'speed'; speed: Speed }
   | { kind: 'command'; ref: number; type: string; payload: Record<string, unknown> }
+  | { kind: 'auto'; on: boolean }
   | { kind: 'save' }
   | { kind: 'exportSave' };
 
@@ -95,4 +96,5 @@ export type FromWorker =
   | { kind: 'saved'; text: string; reason: 'manual' | 'season' | 'background' }
   | { kind: 'export'; text: string }
   | { kind: 'alert'; text: string }
+  | { kind: 'auto'; on: boolean; note?: string }
   | { kind: 'error'; message: string };
