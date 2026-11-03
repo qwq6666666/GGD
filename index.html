@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#2f3b2a" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <title>生生之境</title>
+    <script type="module" crossorigin src="./assets/index-NawN3WcZ.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/phaser-0YPJO2g1.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-Bz8jh42i.css">
+  </head>
+  <body>
+    <header id="top">
+      <div class="row1">
+        <div class="place">生生村</div>
+        <div id="date"><span id="dt" aria-live="polite">—</span> <span id="clock"></span></div>
+        <button id="auto" aria-label="電腦自動模式" aria-pressed="false" title="電腦自動模式">🤖</button>
+        <div id="speed" role="group" aria-label="速度">
+          <button data-speed="pause" aria-label="暫停">⏸</button>
+          <button data-speed="normal" aria-label="正常">▶</button>
+          <button data-speed="fast" aria-label="快速">⏩</button>
+          <button data-speed="max" aria-label="極速">⏭</button>
+        </div>
+      </div>
+      <div id="stats"></div>
+    </header>
+    <main id="map" aria-label="地圖">
+      <div id="hint" hidden></div>
+      <div id="zoom"><button data-zoom="in" aria-label="放大">＋</button><button data-zoom="out" aria-label="縮小">－</button></div>
+      <div id="toasts" aria-live="polite"></div>
+    </main>
+    <section id="card" hidden></section>
+    <section id="sheet" hidden></section>
+    <nav id="bottom">
+      <button data-tab="build" aria-label="建設"><span class="ic">🏗</span><small>建設</small></button>
+      <button data-tab="proposals" aria-label="提案"><span class="ic">📜</span><small>提案</small><span id="badge" hidden></span></button>
+      <button data-tab="family" aria-label="家族"><span class="ic">🏠</span><small>家族</small></button>
+      <button data-tab="world" aria-label="世界"><span class="ic">🌍</span><small>世界</small></button>
+      <button data-tab="history" aria-label="歷史"><span class="ic">📖</span><small>歷史</small></button>
+    </nav>
+    <div id="modal" hidden></div>
+  </body>
+</html>
