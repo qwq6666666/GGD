@@ -1,10 +1,19 @@
 export const SEASONS = ['春', '夏', '秋', '冬'];
 export const COMMODITIES = ['糧食', '木材', '石材', '工具', '家具'];
+export const COM_ICON = ['🌾', '🪵', '🪨', '🔧', '🪑'];
 export const GROUPS = ['農戶', '工匠', '商人', '無業'];
+export const GROUP_ICON = ['🌾', '🔨', '💼', '🚶'];
+export const BUILDING_ICON: Record<string, string> = {
+  home: '🏠', field: '🌾', lumber: '🪓', quarry: '⛏', toolshop: '🔧', furnshop: '🪑', market: '🏪', storage: '📦', school: '🏫', clinic: '⚕', publichome: '🏘',
+};
+/** 小標籤：圖示＋數字 */
+export const tag = (icon: string, v: string | number, cls = ''): string => `<span class="tg ${cls}">${icon}<b>${v}</b></span>`;
+/** 摺疊的詳細說明（預設收合） */
+export const more = (inner: string, label = 'ⓘ'): string => `<details class="more"><summary aria-label="詳細">${label}</summary>${inner}</details>`;
 export const FAMILIES = [
-  { name: '農耕世家', desc: '農業技能高，與農戶關係深；家中三位成年人皆務農。', hh: 1 },
-  { name: '工匠家族', desc: '工藝技能高；家中兩位工匠，現金較少，需靠公共工程與工資過活。', hh: 4 },
-  { name: '商旅家族', desc: '商業技能高、現金較多，與貿易節點有往來；較不依賴農田。', hh: 6 },
+  { name: '農耕世家', desc: '🌾 務農起家，人緣好', hh: 1 },
+  { name: '工匠家族', desc: '🔨 手藝好，但錢少', hh: 4 },
+  { name: '商旅家族', desc: '💼 有錢，通商路', hh: 6 },
 ];
 
 export const BUILDING_LABEL: Record<string, string> = {
@@ -40,16 +49,16 @@ export const REASON: Record<string, string> = {
 export const reasonText = (r: string): string => REASON[r] ?? r;
 
 export const POLICY_LABEL: Record<string, string> = {
-  harvestTaxPermille: '收成稅（‰）',
-  commerceTaxPermille: '商業稅（‰）',
-  agriSubsidy: '農業補助（文／農田／季）',
+  harvestTaxPermille: '🌾 收成稅‰',
+  commerceTaxPermille: '💼 商業稅‰',
+  agriSubsidy: '🌱 農業補助',
   housingSubsidy: '住宅補助',
-  mintPerSeason: '鑄幣發行（文／季）',
-  leaderSalaryMonthly: '領袖俸給（文／月，基準 60）',
+  mintPerSeason: '🪙 鑄幣／季',
+  leaderSalaryMonthly: '👑 領袖俸給／月',
   roadPriority: '道路優先',
-  workRelief: '以工代賑（0 關／1 開）',
-  educationBudget: '教育預算（文／季）',
-  healthBudget: '醫療預算（文／季）',
+  workRelief: '🤝 以工代賑',
+  educationBudget: '🏫 教育預算',
+  healthBudget: '⚕ 醫療預算',
 };
 
 export const POLICY_RANGE: Record<string, [number, number, number]> = {

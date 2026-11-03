@@ -1,7 +1,7 @@
 import { ECON } from '@ss/content';
 import { findPath, footprintOf as _fp, validatePlacement, type BuildingType, type MapState } from '@ss/sim';
 import type { Ghost, MapScene } from './game/MapScene.js';
-import { BUILDING_LABEL, COMMODITIES, FAMILIES, GROUPS, POLICY_LABEL, POLICY_RANGE, PROPOSAL_LABEL, SEASONS, STATE_LABEL, TRAIT_LABEL, esc, reasonText } from './i18n.js';
+import { BUILDING_ICON, BUILDING_LABEL, COMMODITIES, COM_ICON, FAMILIES, GROUPS, GROUP_ICON, more, tag, POLICY_LABEL, POLICY_RANGE, PROPOSAL_LABEL, SEASONS, STATE_LABEL, TRAIT_LABEL, esc, reasonText } from './i18n.js';
 import type { NpcView, Snapshot, Speed } from './protocol.js';
 import type { Store } from './store.js';
 
@@ -25,6 +25,8 @@ const BUILD_OPTIONS: { id: string; label: string; mode: Mode; note: string }[] =
   { id: 'zone0', label: '保育區', mode: { kind: 'zone', zone: 0 }, note: '劃定後林場不會砍伐此範圍。點兩個對角。' },
   { id: 'zone2', label: '植林', mode: { kind: 'zone', zone: 2 }, note: '在可建區外的空地植樹，每格 2 文。點兩個對角。' },
 ];
+
+const BUILD_ICON: Record<string, string> = { road: '🟫', stone: '🪨', bridge: '🌉', stonebridge: '🏛', publichome: '🏘', field: '🌾', lumber: '🪓', quarry: '⛏', toolshop: '🔧', furnshop: '🪑', school: '🏫', clinic: '⚕', zone1: '💼', zone0: '🌳', zone2: '🌱' };
 
 const BUILD_WHY: Record<string, { groups: string; short: string; risk: string }> = {
   school: { groups: '學齡兒童與其家庭', short: '施工後設定教育預算才有效果', risk: '每季教育經費；孩子成年後才見成果' },
@@ -110,11 +112,11 @@ export class Ui {
     if (!s || this.tutStep >= 99) return '';
     const open = s.proposals.filter((p) => p.status === 0).length;
     const steps: { when: boolean; text: string }[] = [
-      { when: true, text: '歡迎，領袖。按右上角 ▶ 讓時間流動，隨時可按 ⏸ 暫停思考。點地圖上的人或建築可查看他們的想法。' },
-      { when: open > 0, text: '居民提出了提案（「提案」有紅點）。核准、延後或拒絕都有代價，也會影響居民對你的信任。' },
-      { when: s.works.some((w) => w.kind !== 'maintenance') || s.stats.pop > 0 && s.tick > 150, text: '公共工程需要人手與材料，進度可在「建設」查看；冬季農閒最容易招到人。' },
-      { when: s.seasonSummary.length >= 1, text: '季末會結算支持度。到「家族」看是哪些因素在拖累；偏袒自家會被察覺。' },
-      { when: s.tick > 270, text: '糧價與存糧是春荒前的關鍵。「世界」可調政策、向貿易節點採購。「歷史」記錄因果。' },
+      { when: true, text: '▶ 開始；⏸ 暫停。點人或建築看想法。' },
+      { when: open > 0, text: '📜 有提案了：✔ 核准、⏳ 延後、✖ 拒絕。' },
+      { when: s.works.some((w) => w.kind !== 'maintenance') || s.stats.pop > 0 && s.tick > 150, text: '🏗 工程要人手與材料；冬天最好招人。' },
+      { when: s.seasonSummary.length >= 1, text: '季末結算 👥 支持度；到 🏠 看原因。' },
+      { when: s.tick > 270, text: '🌾 存糧是春荒關鍵；🌍 可調政策、買糧。' },
     ];
     const cur = steps[this.tutStep];
     if (!cur) {
@@ -160,7 +162,7 @@ export class Ui {
         } else {
           const p = findPath(map as unknown as MapState, this.anchor.x, this.anchor.y, x, y);
           tiles = p ? p.steps.map((i) => ({ x: i % map.w, y: Math.floor(i / map.w) })) : [];
-          if (!p) this.store.toast('這兩點之間沒有路徑', 'warn');
+          if (!p) this.store.toast('⛔ 無路徑', 'warn');
         }
         this.roadTiles = tiles
           .filter((t) => {
@@ -231,13 +233,13 @@ export class Ui {
   private updateHint(): void {
     const el = document.querySelector('#hint') as HTMLElement;
     let t = '';
-    if (this.mode.kind === 'place') t = this.anchor ? '已選位置；到「建設」面板確認，或點別處改位置。' : `點地圖選擇「${BUILDING_LABEL[this.mode.type] ?? ''}」的位置（出入口在下方黃點）。`;
-    else if (this.mode.kind === 'road') t = this.roadTiles.length ? `路線 ${this.roadTiles.length} 格；到「建設」面板確認。` : this.anchor ? '再點終點。' : '點起點。';
-    else if (this.mode.kind === 'zone') t = this.rect ? '已選範圍；到「建設」面板確認。' : this.anchor ? '再點對角。' : '點範圍的一個角。';
+    if (this.mode.kind === 'place') t = this.anchor ? '👆 已選位置，可再點改位置' : `👆 點地圖選 ${BUILDING_ICON[this.mode.type] ?? ''}${BUILDING_LABEL[this.mode.type] ?? ''} 的位置`;
+    else if (this.mode.kind === 'road') t = this.roadTiles.length ? `🟫 ${this.roadTiles.length} 格，下方確認` : this.anchor ? '👆 點終點' : '👆 點起點';
+    else if (this.mode.kind === 'zone') t = this.rect ? '下方確認' : this.anchor ? '👆 點對角' : '👆 點範圍一角';
     const tut = t ? '' : this.tutorialText();
     el.hidden = !t && !tut;
     if (t) el.textContent = t;
-    else if (tut) el.innerHTML = `${esc(tut)}<div class="row"><button class="btn" data-tut="next">知道了</button><button class="btn" data-tut="skip">略過教學</button></div>`;
+    else if (tut) el.innerHTML = `${esc(tut)}<div class="row"><button class="btn" data-tut="next">OK</button><button class="btn" data-tut="skip">略過</button></div>`;
   }
 
   // ---------- 面板 ----------
@@ -287,9 +289,9 @@ export class Ui {
     const foodCls = food < 30 ? 'bad' : food > 90 ? 'good' : '';
     // 主畫面最多 3 個摘要狀態，其一固定為支持度（GDD 10）
     (document.querySelector('#stats') as HTMLElement).innerHTML =
-      `<span class="chip ${supCls}" data-go="family">支持度 <b>${sup}</b> ${arrow}</span>` +
-      `<span class="chip ${foodCls}" data-go="world">存糧 <b>${food}</b> 日/人</span>` +
-      `<span class="chip" data-go="world">公庫 <b>${s.pub.cash}</b> 文</span>`;
+      `<span class="chip ${supCls}" data-go="family" aria-label="支持度">👥<b>${sup}</b>${arrow}</span>` +
+      `<span class="chip ${foodCls}" data-go="world" aria-label="存糧天數">🌾<b>${food}</b><small>日</small></span>` +
+      `<span class="chip" data-go="world" aria-label="公庫">💰<b>${s.pub.cash}</b></span>`;
     const open = s.proposals.filter((p) => p.status === 0).length;
     const badge = document.querySelector('#badge') as HTMLElement;
     badge.hidden = open === 0;
@@ -351,23 +353,23 @@ export class Ui {
   // 建設 ----------------------------------------------------------
   private buildPanel(s: Snapshot): string {
     const perm = s.leadership.playerIsLeader && s.leadership.mode === 0;
-    let h = `<h3>建設與土地</h3>`;
-    if (!perm) h += `<p class="muted">目前不是領袖，無法下達公共建設命令。</p>`;
+    let h = '';
+    if (!perm) h += `<p class="muted">🔒 目前不是領袖</p>`;
     const opt = BUILD_OPTIONS.find((o) => this.isMode(o));
     // 選好類型後收合選單，只留預覽與確認，讓地圖空出來點選位置
-    if (!opt) h += `<div class="grid">${BUILD_OPTIONS.map((o) => `<button class="btn" data-act="mode:${o.id}" ${perm ? '' : 'disabled'}>${o.label}</button>`).join('')}</div>`;
+    if (!opt) h += `<div class="grid icons">${BUILD_OPTIONS.map((o) => `<button class="btn ib" data-act="mode:${o.id}" ${perm ? '' : 'disabled'}><span class="ic">${BUILD_ICON[o.id] ?? ''}</span><small>${o.label}</small></button>`).join('')}</div>`;
     if (opt) {
-      h += `<div class="card"><b>${opt.label}</b><div class="muted">${opt.note}</div>`;
+      h += `<div class="card"><b>${BUILD_ICON[opt.id] ?? ''} ${opt.label}</b>`;
       h += this.buildPreview(s, opt);
       h += `</div>`;
     }
     const works = s.works.filter((w) => w.kind !== 'maintenance');
     if (works.length) {
-      h += `<h4>進行中的工程</h4>`;
       for (const w of works) {
         const pct = Math.min(100, Math.floor((w.progressFx * 100) / Math.max(1, w.requiredPDFx)));
-        const label = w.kind === 'road' ? `道路 ${w.tiles.length} 格` : BUILDING_LABEL[s.buildings.find((b) => b.id === w.buildingId)?.type ?? ''] ?? '工程';
-        h += `<div class="card"><div>${label}&emsp;${w.state === 0 ? '<span class="pill">等待材料</span>' : `<span class="pill">施工中 ${pct}%</span>`}</div><div class="bar"><i style="width:${pct}%"></i></div><div class="row"><span class="muted">材料 木${w.reserved[1]}/${w.needed[1]} 石${w.reserved[2]}/${w.needed[2]}&emsp;已付工資 ${w.cost}</span><button class="btn danger" data-act="cancel:${w.id}">撤銷</button></div></div>`;
+        const type = s.buildings.find((b) => b.id === w.buildingId)?.type ?? '';
+        const label = w.kind === 'road' ? `🟫 ${w.tiles.length}` : `${BUILDING_ICON[type] ?? '🏗'} ${BUILDING_LABEL[type] ?? '工程'}`;
+        h += `<div class="card"><div class="row"><b>${label}</b>${w.state === 0 ? '<span class="pill">⏳ 等材料</span>' : `<span class="pill">🔨 ${pct}%</span>`}<button class="btn danger" data-act="cancel:${w.id}" aria-label="撤銷">✖</button></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;
       }
     }
     return h;
@@ -382,7 +384,9 @@ export class Ui {
   private buildPreview(s: Snapshot, opt: { id: string; mode: Mode }): string {
     const wage = s.wages[5]!;
     const why = BUILD_WHY[opt.id];
-    const rows: [string, string][] = [];
+    const note = BUILD_OPTIONS.find((o) => o.id === opt.id)?.note ?? '';
+    let status = '';
+    let cost = '';
     let ok = false;
     let btn = '';
     if (opt.mode.kind === 'road') {
@@ -392,44 +396,47 @@ export class Ui {
       const wood = n * (rm === 'dirt' ? ECON.road.dirtWood : rm === 'bridge' ? U.bridge.wood : 0);
       const stone = n * (rm === 'stone' ? U.stoneRoad.stone : rm === 'stonebridge' ? U.bridge.stoneStone : 0);
       const pd = n * (rm === 'dirt' ? ECON.road.dirtPersonDays : rm === 'stone' ? U.stoneRoad.personDays : rm === 'bridge' ? U.bridge.personDays : U.bridge.stonePersonDays);
-      rows.push(['格數', `${n}`], ['公共成本', `${pd * wage + wood * s.prices[1]! + stone * s.prices[2]!} 文（工資 ${pd * wage}）`], ['所需物資', `木材 ${wood}／石材 ${stone}（庫存 ${s.pub.stock[1]}／${s.pub.stock[2]}）`], ['施工人日', `${pd}`]);
+      status = n ? tag('🟫', n) : '<span class="muted">👆 點起點與終點</span>';
+      cost = tag('🪙', pd * wage + wood * s.prices[1]! + stone * s.prices[2]!) + (wood ? tag('🪵', wood) : '') + (stone ? tag('🪨', stone) : '') + tag('👷', pd);
       ok = n > 0 && s.pub.cash >= pd * wage;
       btn = `data-act="do:road"`;
     } else if (opt.mode.kind === 'place') {
       const cfg = (ECON.build as Record<string, { wood: number; stone: number; personDays: number }>)[opt.mode.type === 'publichome' ? 'home' : opt.mode.type]!;
       const map = this.store.map;
       const err = this.anchor && map ? validatePlacement(map as unknown as MapState, s.buildings, opt.mode.type as BuildingType, this.anchor.x, this.anchor.y) : 'none';
-      rows.push(['位置', this.anchor ? (err ? `不可：${reasonText('invalid_target:' + err)}` : `(${this.anchor.x}, ${this.anchor.y}) 可建`) : '尚未選擇'], ['公共成本', `${cfg.personDays * wage + cfg.wood * s.prices[1]! + cfg.stone * s.prices[2]!} 文（工資 ${cfg.personDays * wage}）`], ['所需物資', `木材 ${cfg.wood}／石材 ${cfg.stone}（庫存 ${s.pub.stock[1]}／${s.pub.stock[2]}）`], ['施工人日', `${cfg.personDays}`]);
+      status = this.anchor ? (err ? `<span class="down">⛔ ${reasonText('invalid_target:' + err)}</span>` : '<span class="up">✔ 可建</span>') : '<span class="muted">👆 點地圖選位置</span>';
+      cost = tag('🪙', cfg.personDays * wage + cfg.wood * s.prices[1]! + cfg.stone * s.prices[2]!) + (cfg.wood ? tag('🪵', cfg.wood) : '') + (cfg.stone ? tag('🪨', cfg.stone) : '') + tag('👷', cfg.personDays);
       ok = !!this.anchor && !err && s.pub.cash >= cfg.personDays * wage;
       btn = `data-act="do:place"`;
     } else if (opt.mode.kind === 'zone') {
       const r = this.anchor && this.rect ? { w: Math.abs(this.rect.x - this.anchor.x) + 1, h: Math.abs(this.rect.y - this.anchor.y) + 1 } : null;
-      rows.push(['範圍', r ? `${r.w}×${r.h}` : '尚未選擇']);
-      if (opt.mode.zone === 2 && r) rows.push(['公共成本', `${r.w * r.h * 2} 文（上限）`]);
+      status = r ? tag('▦', `${r.w}×${r.h}`) : '<span class="muted">👆 點兩個對角</span>';
+      if (opt.mode.zone === 2 && r) cost = tag('🪙', r.w * r.h * 2);
       ok = !!r;
       btn = `data-act="do:zone"`;
     }
-    let h = `<div class="kv">${rows.map(([k, v]) => `<span>${k}</span><span>${esc(v)}</span>`).join('')}`;
-    if (why) h += `<span>受影響群體</span><span>${why.groups}</span><span>短期預估</span><span>${why.short}</span><span>長期風險</span><span>${why.risk}</span><span>最早生效</span><span>有人接工後施工；冬季最容易招到人</span>`;
-    h += `</div><div class="row"><button class="btn primary" ${btn} ${ok ? '' : 'disabled'}>確認興建</button><button class="btn" data-act="mode:none">換類型／取消</button></div><div class="muted">預估為條件推演，不保證居民配合；確認前不會扣款。</div>`;
-    return h;
+    const stock = tag('🪵', s.pub.stock[1] ?? 0) + tag('🪨', s.pub.stock[2] ?? 0);
+    let detail = `<p>${note}</p>`;
+    if (why) detail += `<div class="kv"><span>影響</span><span>${why.groups}</span><span>短期</span><span>${why.short}</span><span>風險</span><span>${why.risk}</span></div>`;
+    detail += `<p class="muted">庫存 ${stock}&emsp;確認前不扣款，居民不一定配合。</p>`;
+    return `<div class="row">${status}${cost}</div><div class="row"><button class="btn primary" ${btn} ${ok ? '' : 'disabled'}>✔ 興建</button><button class="btn" data-act="mode:none" aria-label="取消">✖</button>${more(detail)}</div>`;
   }
 
   // 提案 ----------------------------------------------------------
   private proposalPanel(s: Snapshot): string {
     const open = s.proposals;
-    let h = `<h3>居民提案</h3>`;
-    if (!open.length) {
-      return h + `<p class="muted">目前沒有提案。村況：人口 ${s.stats.pop}，存糧 ${s.stats.foodDays} 日/人，支持度 ${s.leadership.support}。</p>`;
-    }
+    if (!open.length) return `<p class="muted">📭 沒有提案&emsp;${tag('👥', s.leadership.support)}${tag('🌾', s.stats.foodDays)}</p>`;
     const perm = s.leadership.playerIsLeader && s.leadership.mode === 0;
+    let h = '';
     for (const p of open) {
       const who = s.npcs.find((n) => n.id === p.proposerId);
       const hh = who ? s.households.find((x) => x.id === who.householdId) : undefined;
-      const mats = p.materials.map((m, i) => (m ? `${COMMODITIES[i]}${m}` : '')).filter(Boolean).join('、') || '無';
-      h += `<div class="card"><div><b>${PROPOSAL_LABEL[p.kind] ?? p.kind}</b> <span class="pill">${p.status === 2 ? '已延後' : '待決'}</span> <span class="pill">${p.priority ? '高優先' : '一般'}</span></div>
-      <div class="kv"><span>提案人</span><span>${esc(who?.name ?? '?')}（${esc(hh?.name ?? '')}）</span><span>原因</span><span>${esc(p.expectedEffects)}</span><span>證據</span><span>${p.evidence}</span><span>公共成本</span><span>約 ${p.cost} 文</span><span>所需物資</span><span>${mats}</span><span>期限</span><span>${Math.max(0, p.expiry - s.tick)} 日</span><span>人情</span><span>核准 +8 信任；拒絕 −8（${esc(hh?.name ?? '')}）</span></div>
-      <div class="row"><button class="btn primary" data-act="prop:${p.id}:approve" ${perm ? '' : 'disabled'}>核准</button><button class="btn" data-act="prop:${p.id}:defer" ${perm ? '' : 'disabled'}>延後</button><button class="btn danger" data-act="prop:${p.id}:reject" ${perm ? '' : 'disabled'}>拒絕</button></div></div>`;
+      const mats = p.materials.map((m, i) => (m ? tag(COM_ICON[i]!, m) : '')).join('');
+      const left = Math.max(0, p.expiry - s.tick);
+      const detail = `<div class="kv"><span>提案人</span><span>${esc(who?.name ?? '?')}（${esc(hh?.name ?? '')}）</span><span>證據</span><span>${p.evidence}</span><span>人情</span><span>核准 +8／拒絕 −8 信任</span></div>`;
+      h += `<div class="card"><div class="row"><b>${PROPOSAL_LABEL[p.kind] ?? p.kind}</b>${p.priority ? '<span class="pill">❗</span>' : ''}${p.status === 2 ? '<span class="pill">⏳</span>' : ''}${tag('🪙', p.cost)}${mats}${tag('⌛', left)}${more(detail)}</div>
+      <div class="muted">${esc(p.expectedEffects)}</div>
+      <div class="row act3"><button class="btn primary" aria-label="核准" data-act="prop:${p.id}:approve" ${perm ? '' : 'disabled'}>✔</button><button class="btn" aria-label="延後" data-act="prop:${p.id}:defer" ${perm ? '' : 'disabled'}>⏳</button><button class="btn danger" aria-label="拒絕" data-act="prop:${p.id}:reject" ${perm ? '' : 'disabled'}>✖</button></div></div>`;
     }
     return h;
   }
@@ -438,44 +445,45 @@ export class Ui {
   private familyPanel(s: Snapshot): string {
     const L = s.leadership;
     const hh = s.households.find((x) => x.id === L.playerHouseholdId);
-    let h = `<h3>家族與支持度</h3>`;
+    let h = '';
     if (L.mode === 2) {
-      h += `<div class="card"><b>玩家家族已斷絕</b><div class="muted">選擇另一個家族接手，聚落紀錄會保留。</div><div class="grid">${s.households.filter((x) => x.memberIds.length).map((x) => `<button class="btn" data-act="switch:${x.id}">${esc(x.name)}</button>`).join('')}</div></div>`;
-      return h;
+      return `<div class="card"><b>💀 家族斷絕</b><div class="muted">選一個家族接手</div><div class="grid">${s.households.filter((x) => x.memberIds.length).map((x) => `<button class="btn" data-act="switch:${x.id}">${esc(x.name)}</button>`).join('')}</div></div>`;
     }
     const leader = s.npcs.find((n) => n.id === L.leaderId);
-    h += `<div class="kv"><span>領袖</span><span>${esc(leader?.name ?? '—')}${L.playerIsLeader ? '（你的家族）' : '（AI 代理）'}</span><span>任期起</span><span>第 ${Math.floor(L.termStartTick / 360) + 1} 年</span><span>支持度</span><span>${L.support}&emsp;${L.support >= 60 ? '正常施政' : L.support >= 40 ? '新政策延後一季' : '低於 40'}&emsp;連續低於 30：${L.lowSupportSeasons} 季</span></div>`;
-    if (L.mode === 1) {
-      const can = L.nextElectionTick > 0 && s.tick >= L.nextElectionTick;
-      h += `<div class="card">你的家族目前是一般村民；AI 代理領袖只維持現行政策。<br/>${can ? '' : `下次可參選：${Math.max(0, L.nextElectionTick - s.tick)} 日後`}<div class="row"><button class="btn primary" data-act="stand" ${can ? '' : 'disabled'}>參選領袖</button></div></div>`;
-    }
-    h += `<h4>支持度結構</h4>`;
     const last = s.supportLog[s.supportLog.length - 1];
     const prev = s.supportLog[s.supportLog.length - 2];
+    const sup = L.support;
+    h += `<div class="gauge ${sup >= 60 ? 'good' : sup < 40 ? 'bad' : ''}"><span>👥</span><div class="bar big"><i style="width:${Math.min(100, sup)}%"></i></div><b>${sup}</b></div>`;
+    h += `<div class="row">${tag('👑', esc(leader?.name ?? '—') + (L.playerIsLeader ? ' ★' : ' 🤖'))}${L.lowSupportSeasons ? tag('⚠', L.lowSupportSeasons + '季', 'bad') : ''}${more(`<div class="kv"><span>任期起</span><span>第 ${Math.floor(L.termStartTick / 360) + 1} 年</span><span>門檻</span><span>≥60 正常；40–59 新政策延後；&lt;30 連兩季改選</span></div>`)}</div>`;
+    if (L.mode === 1) {
+      const can = L.nextElectionTick > 0 && s.tick >= L.nextElectionTick;
+      h += `<div class="card">🙋 你已卸任 ${can ? '' : tag('⌛', Math.max(0, L.nextElectionTick - s.tick))}<button class="btn primary" data-act="stand" ${can ? '' : 'disabled'}>參選領袖</button></div>`;
+    }
     if (last) {
-      h += `<div class="muted">各群體：${GROUPS.map((g, i) => `${g} ${last.groups[i]}`).join('&emsp;')}</div>`;
-      h += last.factors.map((f, i) => {
+      // 只列最差 3 項因子，其餘收進摺疊
+      const idx = last.factors.map((f, i) => ({ f, i })).sort((a, b) => a.f.value - b.f.value);
+      const row = ({ f, i }: { f: { name: string; value: number }; i: number }): string => {
         const d = prev ? f.value - prev.factors[i]!.value : 0;
-        return `<div>${f.name}&emsp;<span class="${d >= 0 ? 'up' : 'down'}">${prev ? (d >= 0 ? '▲' : '▼') + Math.abs(d) : ''}</span><div class="bar ${f.value < 500 ? 'bad' : ''}"><i style="width:${Math.min(100, f.value / 10)}%"></i></div></div>`;
-      }).join('');
-      const worst = [...last.factors].sort((a, b) => a.value - b.value)[0]!;
-      h += `<div class="muted">目前最拖累支持度的是「${worst.name}」。</div>`;
-    } else h += `<p class="muted">第一次結算在季末。</p>`;
+        return `<div class="frow"><span>${f.name}</span><div class="bar ${f.value < 500 ? 'bad' : ''}"><i style="width:${Math.min(100, f.value / 10)}%"></i></div><span class="${d >= 0 ? 'up' : 'down'}">${prev ? (d >= 0 ? '▲' : '▼') + Math.abs(d) : ''}</span></div>`;
+      };
+      h += idx.slice(0, 3).map(row).join('');
+      h += more(`${idx.slice(3).map(row).join('')}<div class="row">${GROUPS.map((g, i) => tag(GROUP_ICON[i]!, last.groups[i] ?? 0)).join('')}</div>`, '… 其他因子');
+    } else h += `<p class="muted">⌛ 季末第一次結算</p>`;
     if (hh) {
-      h += `<h4>${esc(hh.name)}</h4><div class="kv"><span>家族帳戶</span><span>${hh.cash} 文</span><span>存糧</span><span>${hh.stock[0]}（${Math.floor(hh.stock[0]! / Math.max(1, hh.memberIds.length))} 日）</span><span>家具</span><span>${hh.stock[4]}</span></div>`;
+      h += `<h4>🏠 ${esc(hh.name)}</h4><div class="row">${tag('🪙', hh.cash)}${tag('🌾', hh.stock[0] ?? 0)}${tag('🪑', hh.stock[4] ?? 0)}</div>`;
       const members = s.npcs.filter((n) => n.householdId === hh.id);
-      h += `<table>${members.map((n) => `<tr><td>${esc(n.name)}${n.id === L.leaderId ? ' ★' : ''}</td><td>${n.age} 歲</td><td>${this.jobText(s, n)}</td><td><button class="btn" data-act="npc:${n.id}">看</button></td></tr>`).join('')}</table>`;
-      h += `<h4>家族世系與傳記</h4>` + members.map((n) => {
-        const parents = n.id ? s.npcs.filter((p) => p.householdId === hh.id && p.id !== n.id && p.age > n.age + 14).map((p) => p.name) : [];
+      h += `<table>${members.map((n) => `<tr><td>${esc(n.name)}${n.id === L.leaderId ? ' ★' : ''}</td><td>${n.age}</td><td>${this.jobText(s, n)}</td><td><button class="btn" data-act="npc:${n.id}" aria-label="查看">👁</button></td></tr>`).join('')}</table>`;
+      const bios = members.map((n) => {
         const spouse = s.npcs.find((p) => p.id === n.spouseId);
-        return `<details class="card"><summary>${esc(n.name)}（${n.age}）${spouse ? ' ♥ ' + esc(spouse.name) : ''}${parents.length ? ' · 長輩：' + esc(parents.join('、')) : ''}</summary>${n.bio.length ? `<ul class="timeline">${n.bio.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : '<div class="muted">尚無記錄。</div>'}</details>`;
+        return `<details class="card"><summary>${esc(n.name)}（${n.age}）${spouse ? ' ♥ ' + esc(spouse.name) : ''}</summary>${n.bio.length ? `<ul class="timeline">${n.bio.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : '<div class="muted">—</div>'}</details>`;
       }).join('');
+      h += `<details class="more"><summary>📖 傳記</summary>${bios}</details>`;
       const adults = members.filter((n) => n.age >= 18);
       if (L.playerIsLeader && adults.length) {
-        h += `<h4>繼承人候選</h4><div class="row"><select data-act="heir">${adults.map((n) => `<option value="${n.id}" ${n.id === L.heirId ? 'selected' : ''}>${esc(n.name)}（${n.age}）</option>`).join('')}</select><button class="btn" data-act="heir-set">指定</button></div><div class="muted">領袖死亡且支持度 ≥ 50 時由繼承人繼任；否則舉行改選。</div>`;
+        h += `<div class="row">🧭 繼承人 <select data-act="heir">${adults.map((n) => `<option value="${n.id}" ${n.id === L.heirId ? 'selected' : ''}>${esc(n.name)}（${n.age}）</option>`).join('')}</select><button class="btn" data-act="heir-set">指定</button>${more('領袖死亡且支持度 ≥ 50 時由繼承人繼任；否則改選。')}</div>`;
       }
       const own = s.enterprises.filter((e) => e.ownerHouseholdId === hh.id);
-      if (own.length) h += `<h4>家庭投資</h4><div class="row">${own.map((e) => `<button class="btn" data-act="invest:${e.id}:200">注資 ${BUILDING_LABEL[s.buildings.find((b) => b.id === e.buildingId)?.type ?? ''] ?? ''} 200</button>`).join('')}</div>`;
+      if (own.length) h += `<div class="row">${own.map((e) => `<button class="btn" data-act="invest:${e.id}:200">${BUILDING_ICON[s.buildings.find((b) => b.id === e.buildingId)?.type ?? ''] ?? ''} 注資 200</button>`).join('')}</div>`;
     }
     return h;
   }
@@ -483,39 +491,36 @@ export class Ui {
   private jobText(s: Snapshot, n: NpcView): string {
     if (n.jobKind === 1) {
       const e = s.enterprises.find((x) => x.id === n.jobId);
-      return e ? BUILDING_LABEL[s.buildings.find((b) => b.id === e.buildingId)?.type ?? ''] ?? '' : '工作';
+      return e ? BUILDING_ICON[s.buildings.find((b) => b.id === e.buildingId)?.type ?? ''] ?? '💼' : '💼';
     }
-    if (n.jobKind === 2) return '公共工程';
-    return n.age < 16 ? '孩童' : n.age > 55 ? '長者' : n.reason.includes('休閒') ? '休閒' : '無業';
+    if (n.jobKind === 2) return '🏗';
+    return n.age < 16 ? '🧒' : n.age > 55 ? '🧓' : n.reason.includes('休閒') ? '🎣' : '🚶';
   }
 
   // 世界 ----------------------------------------------------------
   private worldPanel(s: Snapshot): string {
-    const tabs = this.tabs('world', [['eco', '經濟'], ['policy', '政策'], ['trade', '貿易'], ['sys', '系統']]);
+    const tabs = this.tabs('world', [['eco', '📊'], ['policy', '📜'], ['trade', '🚚'], ['sys', '⚙']]);
     switch (this.sub.world) {
-      case 'policy': return `<h3>政策</h3>${tabs}${this.policyBody(s)}`;
-      case 'trade': return `<h3>貿易節點</h3>${tabs}${this.tradeBody(s)}`;
-      case 'sys': return `<h3>系統</h3>${tabs}${this.systemBody()}`;
-      default: return `<h3>經濟概況</h3>${tabs}${this.ecoBody(s)}`;
+      case 'policy': return `${tabs}${this.policyBody(s)}`;
+      case 'trade': return `${tabs}${this.tradeBody(s)}`;
+      case 'sys': return `${tabs}${this.systemBody()}`;
+      default: return `${tabs}${this.ecoBody(s)}`;
     }
   }
 
   private ecoBody(s: Snapshot): string {
     const old = this.priceHist.length > 4 ? this.priceHist[this.priceHist.length - 5]!.prices : s.prices;
     const cash = s.households.map((h) => h.cash).sort((a, b) => a - b);
-    const total = cash.reduce((a, b) => a + b, 0);
-    const avg = Math.floor(total / Math.max(1, cash.length));
     const top = cash[cash.length - 1] ?? 0;
-    let h = `<table><tr><th>商品</th><th>現價</th><th>基準</th><th>4 週</th><th>庫存（公共）</th></tr>${COMMODITIES.map((c, i) => {
+    const un = Math.floor((s.stats.unemployed * 100) / Math.max(1, s.stats.workforce));
+    let h = `<table><tr><th></th><th>價</th><th></th><th>庫</th></tr>${COMMODITIES.map((c, i) => {
       const d = s.prices[i]! - old[i]!;
-      return `<tr><td>${c}</td><td>${s.prices[i]}</td><td>${ECON.basePrice[i]}</td><td class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '▲' : d < 0 ? '▼' : '＝'}${d ? Math.abs(d) : ''}</td><td>${s.pub.stock[i]}</td></tr>`;
+      return `<tr><td aria-label="${c}">${COM_ICON[i]}</td><td><b>${s.prices[i]}</b></td><td class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '▲' : d < 0 ? '▼' : '＝'}${d ? Math.abs(d) : ''}</td><td>${s.pub.stock[i]}</td></tr>`;
     }).join('')}</table>`;
-    h += `<h4>勞動</h4><div class="kv"><span>工資</span><span>農 ${s.wages[0]}／林 ${s.wages[1]}／石 ${s.wages[2]}／工具 ${s.wages[3]}／家具 ${s.wages[4]}／公共 ${s.wages[5]}</span><span>非自願失業</span><span>${s.stats.unemployed} / ${s.stats.workforce}（${Math.floor((s.stats.unemployed * 100) / Math.max(1, s.stats.workforce))}%）</span><span>人口</span><span>${s.stats.pop}&emsp;聚落吸引力 ${s.attractiveness}</span></div>`;
-    h += `<h4>財政與貨幣</h4><div class="kv"><span>公共帳戶</span><span>${s.pub.cash} 文</span><span>公共存糧</span><span>${s.pub.stock[0]}</span><span>村內貨幣</span><span>${s.moneySupply}</span><span>本季收成</span><span>${s.stats.harvest}</span></div>`;
-    h += `<h4>平均與分配</h4><div class="muted">家庭平均現金 ${avg} 文；最富 ${top}、最少 ${cash[0] ?? 0}。沒有唯一好結局，由你取捨。</div>`;
-    h += s.households.map((x) => `<div>${esc(x.name)} ${x.cash}<div class="bar"><i style="width:${Math.min(100, (x.cash * 100) / Math.max(1, top))}%"></i></div></div>`).join('');
-    if (s.warnings.length) h += `<h4>預警</h4>` + s.warnings.map((w) => `<div class="pill">${w.tick - s.tick} 日後：${esc(w.text)}</div>`).join('');
-    if (s.effects.length) h += `<h4>生效中的事件</h4>` + s.effects.map((e) => `<div class="pill">${esc(e.type)} 還有 ${Math.max(0, e.untilTick - s.tick)} 日</div>`).join('');
+    h += `<div class="row">${tag('🧑', s.stats.pop)}${tag('🚶', un + '%', un > 20 ? 'bad' : '')}${tag('💰', s.pub.cash)}${tag('🌾', s.stats.harvest)}</div>`;
+    if (s.warnings.length) h += s.warnings.map((w) => `<div class="pill">⚠ ${w.tick - s.tick}日 ${esc(w.text)}</div>`).join('');
+    if (s.effects.length) h += s.effects.map((e) => `<div class="pill">${esc(e.type)} ⌛${Math.max(0, e.untilTick - s.tick)}</div>`).join('');
+    h += more(`<div class="kv"><span>工資</span><span>農${s.wages[0]} 林${s.wages[1]} 石${s.wages[2]} 具${s.wages[3]} 家${s.wages[4]} 公${s.wages[5]}</span><span>失業</span><span>${s.stats.unemployed}/${s.stats.workforce}</span><span>吸引力</span><span>${s.attractiveness}</span><span>貨幣量</span><span>${s.moneySupply}</span></div><h4>分配</h4>${s.households.map((x) => `<div class="frow"><span>${esc(x.name)}</span><div class="bar"><i style="width:${Math.min(100, (x.cash * 100) / Math.max(1, top))}%"></i></div><span>${x.cash}</span></div>`).join('')}`, 'ⓘ 工資與分配');
     return h;
   }
 
@@ -523,13 +528,13 @@ export class Ui {
     const perm = s.leadership.playerIsLeader && s.leadership.mode === 0;
     const keys = Object.keys(POLICY_RANGE);
     const pol = s.policies as unknown as Record<string, number>;
-    let h = `<div class="muted">政策下一季初生效${s.leadership.support < 60 && s.leadership.support >= 40 ? '（支持度 40–59，再延後一季）' : ''}；不保證正向效果。</div>`;
+    let h = `<div class="muted">⌛ 下一季初生效${s.leadership.support < 60 && s.leadership.support >= 40 ? '（再延後一季）' : ''}</div>`;
     for (const k of keys) {
       const [lo, hi, st] = POLICY_RANGE[k]!;
       const cur = pol[k]!;
       const val = this.draft[k] ?? cur;
       const pend = s.policies.pending.find((p) => p.key === k);
-      h += `<div class="card"><div>${POLICY_LABEL[k]}：<b>${val}</b> <span class="muted">（現行 ${cur}${pend ? `，待生效 ${pend.value}，${Math.max(0, pend.effectiveTick - s.tick)} 日後` : ''}）</span></div><input type="range" min="${lo}" max="${hi}" step="${st}" value="${val}" data-act="policy-range" data-key="${k}" ${perm ? '' : 'disabled'} />${val !== cur ? `<div class="muted">${this.policyPreview(s, k, val, cur)}</div><button class="btn primary" data-act="policy:${k}" ${perm ? '' : 'disabled'}>套用</button>` : ''}</div>`;
+      h += `<div class="card"><div class="row">${POLICY_LABEL[k]} <b>${val}</b>${val !== cur ? `<span class="muted">（現 ${cur}）</span>` : ''}${pend ? tag('⌛', Math.max(0, pend.effectiveTick - s.tick)) : ''}${more(this.policyPreview(s, k, val, cur))}</div><input type="range" min="${lo}" max="${hi}" step="${st}" value="${val}" data-act="policy-range" data-key="${k}" ${perm ? '' : 'disabled'} />${val !== cur ? `<button class="btn primary" data-act="policy:${k}" ${perm ? '' : 'disabled'}>✔ 套用</button>` : ''}</div>`;
     }
     return h;
   }
@@ -553,42 +558,41 @@ export class Ui {
     const perm = s.leadership.playerIsLeader && s.leadership.mode === 0;
     const node = s.nodes.find((n) => n.id === this.order.node) ?? s.nodes[0]!;
     const unit = Math.max(1, Math.floor((node.basePrice[this.order.item]! * (1000 + node.drift[this.order.item]!)) / 1000));
-    let h = `<div class="muted">採購貨物記為在途，運抵日才入庫；運輸有損耗，價格隨成交量變動。</div><table><tr><th>節點</th>${COMMODITIES.map((c) => `<th>${c}</th>`).join('')}<th>運期</th></tr>${s.nodes.map((n) => `<tr><td>${esc(n.name)}</td>${n.basePrice.map((b, i) => `<td>${Math.floor((b * (1000 + n.drift[i]!)) / 1000)}</td>`).join('')}<td>${n.transitDays} 日</td></tr>`).join('')}</table>`;
-    h += `<div class="row"><select data-act="o-node">${s.nodes.map((n) => `<option value="${n.id}" ${n.id === node.id ? 'selected' : ''}>${esc(n.name)}</option>`).join('')}</select><select data-act="o-item">${COMMODITIES.map((c, i) => `<option value="${i}" ${i === this.order.item ? 'selected' : ''}>${c}</option>`).join('')}</select><input type="number" min="1" max="${node.capacity}" value="${this.order.qty}" data-act="o-qty" style="width:6em;min-height:44px" /></div>`;
-    h += `<div class="kv"><span>預估成本</span><span>${unit * this.order.qty} 文（單價 ${unit}）</span><span>最早到貨</span><span>${node.transitDays} 日後</span><span>運量上限</span><span>${node.capacity}</span></div><div class="row"><button class="btn primary" data-act="order" ${perm && s.pub.cash >= unit * this.order.qty ? '' : 'disabled'}>採購</button></div>`;
-    if (s.shipments.length) h += `<h4>在途貨物</h4>` + s.shipments.map((x) => `<div class="pill">${esc(s.nodes.find((n) => n.id === x.nodeId)?.name ?? '')}：${x.contents.map((c, i) => (c ? `${COMMODITIES[i]}${c}` : '')).join('')}，${Math.max(0, x.arriveTick - s.tick)} 日後運抵</div>`).join('');
+    let h = `<table><tr><th></th>${COM_ICON.map((c) => `<th>${c}</th>`).join('')}<th>⌛</th></tr>${s.nodes.map((n) => `<tr><td>${esc(n.name)}</td>${n.basePrice.map((b, i) => `<td>${Math.floor((b * (1000 + n.drift[i]!)) / 1000)}</td>`).join('')}<td>${n.transitDays}</td></tr>`).join('')}</table>`;
+    h += `<div class="row"><select data-act="o-node">${s.nodes.map((n) => `<option value="${n.id}" ${n.id === node.id ? 'selected' : ''}>${esc(n.name)}</option>`).join('')}</select><select data-act="o-item">${COMMODITIES.map((c, i) => `<option value="${i}" ${i === this.order.item ? 'selected' : ''}>${COM_ICON[i]} ${c}</option>`).join('')}</select><input type="number" min="1" max="${node.capacity}" value="${this.order.qty}" data-act="o-qty" style="width:6em;min-height:44px" /></div>`;
+    h += `<div class="row">${tag('🪙', unit * this.order.qty)}${tag('⌛', node.transitDays)}${more(`單價 ${unit}；運量上限 ${node.capacity}。貨物在途，運抵日才入庫，運輸有損耗，價格隨成交量變動。`)}<button class="btn primary" data-act="order" ${perm && s.pub.cash >= unit * this.order.qty ? '' : 'disabled'}>🚚 採購</button></div>`;
+    if (s.shipments.length) h += s.shipments.map((x) => `<div class="pill">🚚 ${esc(s.nodes.find((n) => n.id === x.nodeId)?.name ?? '')} ${x.contents.map((c, i) => (c ? `${COM_ICON[i]}${c}` : '')).join('')} ⌛${Math.max(0, x.arriveTick - s.tick)}</div>`).join('');
     return h;
   }
 
   private systemBody(): string {
-    return `<div class="row"><button class="btn" data-act="save">立即存檔</button><button class="btn" data-act="export">匯出存檔</button><label class="btn">匯入存檔<input type="file" accept=".json,application/json" data-act="import" hidden /></label></div>
-    <div class="card"><div>文字大小：<b>${this.settings.fs}px</b></div><input type="range" min="13" max="22" value="${this.settings.fs}" data-act="fs" /><label><input type="checkbox" data-act="reduce" ${this.settings.reduce ? 'checked' : ''} /> 關閉動畫</label></div>
-    <div class="row"><button class="btn" data-act="tutorial">重看教學</button><button class="btn danger" data-act="newgame">重新開始新遊戲</button></div><div class="muted">自動存檔：每季結束與切到背景時。關閉 App 即暫停，不做離線追趕。</div>`;
+    return `<div class="row"><button class="btn" data-act="save">💾 存檔</button><button class="btn" data-act="export">📤 匯出</button><label class="btn">📥 匯入<input type="file" accept=".json,application/json" data-act="import" hidden /></label></div>
+    <div class="card"><div class="row">🔠 <b>${this.settings.fs}</b><input type="range" min="13" max="22" value="${this.settings.fs}" data-act="fs" style="flex:1" /></div><label><input type="checkbox" data-act="reduce" ${this.settings.reduce ? 'checked' : ''} /> 🚫 動畫</label></div>
+    <div class="row"><button class="btn" data-act="tutorial">❓ 教學</button><button class="btn danger" data-act="newgame">🔄 新遊戲</button>${more('自動存檔：每季結束與切到背景時。關閉 App 即暫停，不做離線追趕。')}</div>`;
   }
 
   // 歷史 ----------------------------------------------------------
   private historyPanel(s: Snapshot): string {
-    const tabs = this.tabs('history', [['events', '年表'], ['leaders', '領袖'], ['people', '人物'], ['firms', '企業'], ['maps', '地圖'], ['seasons', '季報']]);
-    let h = `<h3>歷史</h3>${tabs}`;
+    const tabs = this.tabs('history', [['events', '📜'], ['leaders', '👑'], ['people', '🪦'], ['firms', '🏭'], ['maps', '🗺'], ['seasons', '📅']]);
+    let h = tabs;
     const sub = this.sub.history;
     if (sub === 'leaders') {
       const ch = s.events.filter((e) => e.type === 'LeaderChanged' || e.type === 'ElectionHeld');
-      h += ch.length ? `<ul class="timeline">${[...ch].reverse().map((e) => `<li class="imp3">${this.when(e.tick)}&emsp;${esc(e.summary)}</li>`).join('')}</ul>` : '<p class="muted">尚無領袖更替。</p>';
+      h += ch.length ? `<ul class="timeline">${[...ch].reverse().map((e) => `<li class="imp3">${this.when(e.tick)}&emsp;${esc(e.summary)}</li>`).join('')}</ul>` : '<p class="muted">—</p>';
       const l = s.npcs.find((n) => n.id === s.leadership.leaderId);
-      h += `<div class="card">現任：${esc(l?.name ?? '—')}（任期自第 ${Math.floor(s.leadership.termStartTick / 360) + 1} 年）</div>`;
+      h += `<div class="card">👑 ${esc(l?.name ?? '—')}&emsp;${tag('📅', '第' + (Math.floor(s.leadership.termStartTick / 360) + 1) + '年')}</div>`;
     } else if (sub === 'people') {
-      h += s.tombstones.length ? [...s.tombstones].reverse().map((t) => `<details class="card"><summary>${esc(t.name)}&emsp;${Math.floor(t.birthTick / 360) + 1}–${Math.floor(t.deathTick / 360) + 1} 年&emsp;${esc(s.households.find((x) => x.id === t.householdId)?.name ?? '')}</summary>${t.bio.length ? `<ul class="timeline">${t.bio.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : '<div class="muted">沒有記錄的生平。</div>'}</details>`).join('') : '<p class="muted">還沒有人過世。</p>';
+      h += s.tombstones.length ? [...s.tombstones].reverse().map((t) => `<details class="card"><summary>${esc(t.name)}&emsp;${Math.floor(t.birthTick / 360) + 1}–${Math.floor(t.deathTick / 360) + 1} 年&emsp;${esc(s.households.find((x) => x.id === t.householdId)?.name ?? '')}</summary>${t.bio.length ? `<ul class="timeline">${t.bio.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : '<div class="muted">沒有記錄的生平。</div>'}</details>`).join('') : '<p class="muted">—</p>';
     } else if (sub === 'firms') {
       const fe = s.events.filter((e) => /^Enterprise|^Strategy/.test(e.type));
-      h += fe.length ? `<ul class="timeline">${[...fe].reverse().map((e) => `<li class="imp${e.importance}">${this.when(e.tick)}&emsp;${esc(e.summary)}</li>`).join('')}</ul>` : '<p class="muted">企業沿革：目前沒有開業、轉型或結業。</p>';
-      h += `<h4>現有企業</h4><table>${s.enterprises.map((e) => `<tr><td>${BUILDING_LABEL[s.buildings.find((b) => b.id === e.buildingId)?.type ?? ''] ?? ''}</td><td>${esc(s.households.find((x) => x.id === e.ownerHouseholdId)?.name ?? '公有')}</td><td>${e.employeeIds.length} 人</td><td>${e.active ? '運作' : '停工'}</td></tr>`).join('')}</table>`;
+      h += fe.length ? `<ul class="timeline">${[...fe].reverse().map((e) => `<li class="imp${e.importance}">${this.when(e.tick)}&emsp;${esc(e.summary)}</li>`).join('')}</ul>` : '<p class="muted">—</p>';
+      h += `<table>${s.enterprises.map((e) => `<tr><td>${BUILDING_ICON[s.buildings.find((b) => b.id === e.buildingId)?.type ?? ''] ?? ''}</td><td>${esc(s.households.find((x) => x.id === e.ownerHouseholdId)?.name ?? '公有')}</td><td>👷${e.employeeIds.length}</td><td>${e.active ? '✔' : '⏸'}</td></tr>`).join('')}</table>`;
     } else if (sub === 'maps') {
-      h += s.mapSnaps.length ? `<div class="row">${s.mapSnaps.slice(-4).map((m, i) => `<div><canvas data-snap="${i}" width="96" height="96" style="width:120px;height:120px;image-rendering:pixelated;border:1px solid var(--line)"></canvas><div class="muted">第 ${Math.floor(m.tick / 360) + 1} 年</div></div>`).join('')}</div><div class="muted">每 5 年一張：藍＝水、綠＝草地、深綠＝森林、褐＝道路、紅＝建築。</div>` : '<p class="muted">第 5 年才會有第一張地圖對照。</p>';
+      h += s.mapSnaps.length ? `<div class="row">${s.mapSnaps.slice(-4).map((m, i) => `<div><canvas data-snap="${i}" width="96" height="96" style="width:120px;height:120px;image-rendering:pixelated;border:1px solid var(--line)"></canvas><div class="muted">第 ${Math.floor(m.tick / 360) + 1} 年</div></div>`).join('')}</div>${more('每 5 年一張：藍＝水、綠＝草地、深綠＝森林、褐＝道路、紅＝建築。')}` : '<p class="muted">⌛ 第 5 年</p>';
     } else if (sub === 'seasons') {
-      h += s.seasonSummary.length ? `<ul class="timeline">${[...s.seasonSummary].reverse().map((x) => `<li>${esc(x.text)}</li>`).join('')}</ul>` : '<p class="muted">第一個季末會出現季報。</p>';
+      h += s.seasonSummary.length ? `<ul class="timeline">${[...s.seasonSummary].reverse().map((x) => `<li>${esc(x.text)}</li>`).join('')}</ul>` : '<p class="muted">⌛ 季末</p>';
     } else {
-      h += s.events.length ? `<ul class="timeline">${[...s.events].reverse().map((e) => `<li class="imp${e.importance}">${this.when(e.tick)}&emsp;${esc(e.summary)}</li>`).join('')}</ul>` : '<p class="muted">無重大事件，日常摘要見季報。</p>';
-      h += `<div class="muted">因果：提案核准 → 工程完工 → 通勤變化，會依序出現在年表。</div>`;
+      h += s.events.length ? `<ul class="timeline">${[...s.events].reverse().map((e) => `<li class="imp${e.importance}">${this.when(e.tick)}&emsp;${esc(e.summary)}</li>`).join('')}</ul>` : '<p class="muted">—</p>';
     }
     return h;
   }
@@ -613,10 +617,12 @@ export class Ui {
         this.card = null;
         return;
       }
-      const hh = s.households.find((x) => x.id === n.householdId);
       const bar = (v: number, bad = false): string => `<div class="bar ${bad ? 'bad' : ''}"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></div>`;
-      el.innerHTML = `<div class="row"><b class="big">${esc(n.name)}</b><span class="muted">${n.age} 歲 · ${esc(hh?.name ?? '')} · ${GROUPS[n.interestGroup]}</span><button class="btn" data-act="follow:${n.id}">追蹤</button><button class="btn" data-act="card-close">×</button></div>
-      <div class="kv"><span>目前</span><span>${STATE_LABEL[n.state]}&emsp;${this.jobText(s, n)}${n.commute > 0 ? `（通勤成本 ${n.commute}）` : ''}</span><span>飢餓</span><span>${bar(100 - n.hunger, n.hunger > 50)}</span><span>健康</span><span>${bar(n.health, n.health < 40)}</span><span>心情</span><span>${bar(n.mood)}</span><span>滿意度</span><span>${n.satisfaction}</span><span>技能</span><span>農${n.skills[0]} 工${n.skills[1]} 商${n.skills[2]} 社${n.skills[3]}</span><span>傾向</span><span>${n.traits.map((t) => `<span class="pill">${TRAIT_LABEL[t]}</span>`).join('')}</span><span>經歷</span><span>${n.tags.length ? n.tags.map((t) => `<span class="pill">${esc(t)}</span>`).join('') : '—'}</span><span>想法</span><span>${esc(n.reason || '一切如常')}</span></div>`;
+      const sk = n.skills;
+      el.innerHTML = `<div class="row"><b class="big">${esc(n.name)}</b><span class="muted">${n.age}&emsp;${this.jobText(s, n)}&emsp;${GROUP_ICON[n.interestGroup] ?? ''}</span><button class="btn" data-act="follow:${n.id}" aria-label="追蹤">🎯</button><button class="btn" data-act="card-close" aria-label="關閉">✖</button></div>
+      <div class="meters"><span>🍞</span>${bar(100 - n.hunger, n.hunger > 50)}<span>❤</span>${bar(n.health, n.health < 40)}<span>😊</span>${bar(n.mood)}</div>
+      <div class="muted">💭 ${esc(n.reason || '一切如常')}</div>
+      ${more(`<div class="kv"><span>狀態</span><span>${STATE_LABEL[n.state]}${n.commute > 0 ? ` 通勤${n.commute}` : ''}</span><span>滿意</span><span>${n.satisfaction}</span><span>技能</span><span>🌾${sk[0]} 🔨${sk[1]} 💼${sk[2]} 🤝${sk[3]}</span><span>傾向</span><span>${n.traits.map((t) => `<span class="pill">${TRAIT_LABEL[t]}</span>`).join('')}</span><span>經歷</span><span>${n.tags.length ? n.tags.map((t) => `<span class="pill">${esc(t)}</span>`).join('') : '—'}</span></div>`)}`;
     } else {
       const b = s.buildings.find((x) => x.id === this.card!.id);
       if (!b) {
@@ -627,9 +633,9 @@ export class Ui {
       const e = s.enterprises.find((x) => x.buildingId === b.id);
       const owner = s.households.find((x) => x.id === b.ownerHouseholdId);
       const emps = e ? s.npcs.filter((n) => e.employeeIds.includes(n.id)) : [];
-      el.innerHTML = `<div class="row"><b class="big">${BUILDING_LABEL[b.type] ?? b.type}</b><span class="muted">${b.state === 'active' ? '運作中' : '施工中'} · ${owner ? esc(owner.name) : '公有'}</span><button class="btn" data-act="card-close">×</button></div>
-      ${e ? `<div class="kv"><span>員工</span><span>${emps.map((n) => esc(n.name)).join('、') || '無'}</span><span>資金</span><span>${e.cash} 文</span><span>庫存</span><span>${COMMODITIES.map((c, i) => (e.stock[i] ? `${c}${e.stock[i]}` : '')).filter(Boolean).join(' ') || '空'}</span>${b.type === 'field' ? `<span>肥力</span><span>${e.fertility}${e.fallow ? '（休耕中）' : ''}</span>` : ''}</div>` : ''}
-      ${b.type === 'home' || b.type === 'publichome' ? `<div class="kv"><span>住戶</span><span>${esc(s.households.find((x) => x.homeId === b.id)?.name ?? '空屋')}</span></div>` : ''}
+      el.innerHTML = `<div class="row"><b class="big">${BUILDING_ICON[b.type] ?? ''} ${BUILDING_LABEL[b.type] ?? b.type}</b><span class="muted">${b.state === 'active' ? '' : '🔨 '}${owner ? esc(owner.name) : '公有'}</span><button class="btn" data-act="card-close" aria-label="關閉">✖</button></div>
+      ${e ? `<div class="row">${tag('👷', emps.length)}${tag('🪙', e.cash)}${e.stock.map((v, i) => (v ? tag(COM_ICON[i]!, v) : '')).join('')}${b.type === 'field' ? tag('🌱', e.fertility + (e.fallow ? ' 休耕' : '')) : ''}${emps.length ? more(emps.map((n) => esc(n.name)).join('、')) : ''}</div>` : ''}
+      ${b.type === 'home' || b.type === 'publichome' ? `<div class="row">🏠 ${esc(s.households.find((x) => x.homeId === b.id)?.name ?? '空屋')}</div>` : ''}
       ${this.upgradeRow(s, b)}`;
     }
   }
@@ -639,10 +645,10 @@ export class Ui {
     if (!list || b.state !== 'active') return '';
     const cfg = list[b.stage] as { wood: number; stone: number; personDays: number } | undefined;
     const names = b.type === 'field' ? ['荒地→耕作', '耕作→灌溉'] : ['茅屋→木屋', '木屋→街屋'];
-    if (!cfg) return `<div class="muted">已是最高階段。</div>`;
+    if (!cfg) return `<div class="muted">⭐ 已最高階</div>`;
     const busy = s.works.some((w) => w.kind === 'upgrade' && w.buildingId === b.id);
     const perm = s.leadership.playerIsLeader && s.leadership.mode === 0;
-    return `<div class="row"><button class="btn primary" data-act="upgrade:${b.id}" ${perm && !busy ? '' : 'disabled'}>升級 ${names[b.stage]}</button><span class="muted">木${cfg.wood} 石${cfg.stone}，${cfg.personDays} 人日，約 ${cfg.personDays * s.wages[5]! + cfg.wood * s.prices[1]! + cfg.stone * s.prices[2]!} 文${busy ? '（施工中）' : ''}</span></div>`;
+    return `<div class="row"><button class="btn primary" data-act="upgrade:${b.id}" ${perm && !busy ? '' : 'disabled'} title="${names[b.stage]}">⬆ 升級</button>${tag('🪙', cfg.personDays * s.wages[5]! + cfg.wood * s.prices[1]! + cfg.stone * s.prices[2]!)}${cfg.wood ? tag('🪵', cfg.wood) : ''}${cfg.stone ? tag('🪨', cfg.stone) : ''}${tag('👷', cfg.personDays)}${busy ? '🔨' : ''}</div>`;
   }
 
   // ---------- 事件處理 ----------
@@ -687,7 +693,7 @@ export class Ui {
   private async cmd(type: string, payload: Record<string, unknown>, okText: string): Promise<boolean> {
     const r = await this.store.command(type, payload);
     if (r.status === 'rejected') {
-      this.store.toast(`無法執行：${reasonText(r.reason)}`, 'warn');
+      this.store.toast(`⛔ ${reasonText(r.reason)}`, 'warn');
       return false;
     }
     this.store.toast(okText, 'good');
@@ -708,11 +714,11 @@ export class Ui {
         break;
       }
       case 'do': void this.doBuild(p1!); break;
-      case 'cancel': void this.cmd('CancelWork', { workId: Number(p1) }, '工程已撤銷，材料退回'); break;
-      case 'prop': void this.cmd('RespondProposal', { proposalId: Number(p1), response: p2 }, p2 === 'approve' ? '已核准' : p2 === 'defer' ? '已延後' : '已拒絕'); break;
+      case 'cancel': void this.cmd('CancelWork', { workId: Number(p1) }, '↩ 已撤銷'); break;
+      case 'prop': void this.cmd('RespondProposal', { proposalId: Number(p1), response: p2 }, p2 === 'approve' ? '✔ 已核准' : p2 === 'defer' ? '⏳ 已延後' : '✖ 已拒絕'); break;
       case 'policy': {
         const k = p1!;
-        void this.cmd('SetPolicy', { key: k, value: this.draft[k] }, '政策已排程，下一季初生效').then((ok) => {
+        void this.cmd('SetPolicy', { key: k, value: this.draft[k] }, '⌛ 下季生效').then((ok) => {
           if (ok) delete this.draft[k];
         });
         break;
@@ -725,12 +731,12 @@ export class Ui {
       case 'stand': void this.cmd('StandForElection', {}, '已參選'); break;
       case 'switch': void this.cmd('SwitchFamily', { householdId: Number(p1) }, '已接手新家族'); break;
       case 'invest': void this.cmd('SetPersonalChoice', { kind: 'invest', enterpriseId: Number(p1), amount: Number(p2) }, '已注資'); break;
-      case 'upgrade': void this.cmd('UpgradeBuilding', { buildingId: Number(p1) }, '升級已排入施工'); break;
-      case 'order': void this.cmd('OrderImport', { nodeId: this.order.node, item: this.order.item, qty: this.order.qty }, '已下單，貨物在途'); break;
+      case 'upgrade': void this.cmd('UpgradeBuilding', { buildingId: Number(p1) }, '🔨 排入施工'); break;
+      case 'order': void this.cmd('OrderImport', { nodeId: this.order.node, item: this.order.item, qty: this.order.qty }, '🚚 已下單'); break;
       case 'npc': this.openNpc(Number(p1)); break;
-      case 'follow': this.scene.follow(Number(p1)); this.store.toast('鏡頭追蹤中，拖曳地圖可取消'); break;
+      case 'follow': this.scene.follow(Number(p1)); this.store.toast('🎯 追蹤中'); break;
       case 'card-close': this.card = null; this.scene.select(null); this.renderCard(); break;
-      case 'save': this.store.send({ kind: 'save' }); this.store.toast('已存檔', 'good'); break;
+      case 'save': this.store.send({ kind: 'save' }); this.store.toast('💾 已存檔', 'good'); break;
       case 'export': this.store.send({ kind: 'exportSave' }); break;
       case 'newgame': this.onNewGame(); break;
       case 'tutorial': this.restartTutorial(); this.closeSheet(); break;
@@ -750,8 +756,8 @@ export class Ui {
     const s = this.store.snap;
     if (!s) return;
     let ok = false;
-    if (kind === 'road') ok = await this.cmd('BuildRoad', { tiles: this.roadTiles, mode: this.mode.kind === 'road' ? this.mode.mode : 'dirt' }, '道路已排入施工');
-    else if (kind === 'place' && this.mode.kind === 'place' && this.anchor) ok = await this.cmd('PlaceBuilding', { type: this.mode.type, x: this.anchor.x, y: this.anchor.y }, '已排入施工');
+    if (kind === 'road') ok = await this.cmd('BuildRoad', { tiles: this.roadTiles, mode: this.mode.kind === 'road' ? this.mode.mode : 'dirt' }, '🔨 排入施工');
+    else if (kind === 'place' && this.mode.kind === 'place' && this.anchor) ok = await this.cmd('PlaceBuilding', { type: this.mode.type, x: this.anchor.x, y: this.anchor.y }, '🔨 排入施工');
     else if (kind === 'zone' && this.mode.kind === 'zone' && this.anchor && this.rect) {
       const a = this.anchor;
       const b = this.rect;
@@ -785,7 +791,7 @@ export class Ui {
   showFamilySelect(canContinue: boolean, onPick: (family: number) => void, onContinue: () => void): void {
     const m = document.querySelector('#modal') as HTMLElement;
     m.hidden = false;
-    m.innerHTML = `<div class="box"><div class="big">生生之境</div><p class="muted">你是村中領袖，也是有家庭與壽命的居民。選擇你的家族，家長即為首任領袖（初始支持度 60）。</p>${FAMILIES.map((f, i) => `<div class="card"><b>${f.name}</b><div class="muted">${f.desc}</div><button class="btn primary" data-pick="${i}">選擇</button></div>`).join('')}${canContinue ? `<button class="btn" data-continue="1">繼續上次的遊戲</button>` : ''}</div>`;
+    m.innerHTML = `<div class="box"><div class="big">生生之境</div><p class="muted">👑 選一個家族，開始當領袖</p>${FAMILIES.map((f, i) => `<div class="card"><b>${f.name}</b><div class="muted">${f.desc}</div><button class="btn primary" data-pick="${i}">✔</button></div>`).join('')}${canContinue ? `<button class="btn" data-continue="1">▶ 繼續</button>` : ''}</div>`;
     m.onclick = (e) => {
       const t = e.target as HTMLElement;
       const pick = t.closest('[data-pick]') as HTMLElement | null;
