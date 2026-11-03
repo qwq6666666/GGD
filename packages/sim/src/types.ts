@@ -31,6 +31,9 @@ export interface MapState {
   road: number[];
   /** 建築佔地：building id，0 無 */
   occ: number[];
+  /** 可建區範圍 [zmin, zmax)，隨村級階段擴張 */
+  zmin: number;
+  zmax: number;
 }
 
 export type BuildingType = 'home' | 'field' | 'lumber' | 'quarry' | 'toolshop' | 'furnshop' | 'market' | 'storage' | 'school' | 'clinic' | 'publichome';
@@ -400,4 +403,6 @@ export interface WorldState {
   mapSnaps: { tick: number; grid: number[] }[];
   /** 最近一次疫病的日期，用於診療覆蓋不足提案 */
   lastEpidemicTick: number;
+  /** 村級階段與已達成目標（ADR-0007） */
+  progress: { stage: number; done: string[] };
 }

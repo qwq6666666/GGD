@@ -38,7 +38,7 @@ function roadTilesBetween(w: WorldState, sx: number, sy: number, gx: number, gy:
     if (w.map.water[i] !== 0) return null; // V1 不自動架橋
     const x = i % w.map.w;
     const y = Math.floor(i / w.map.w);
-    if (!inBuildZone(x, y)) continue;
+    if (!inBuildZone(w.map, x, y)) continue;
     tiles.push({ x, y, type: 1 });
   }
   return tiles;

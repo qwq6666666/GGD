@@ -15,6 +15,7 @@ import { compactHistory, pushEvent } from './history.js';
 import { compactLedger, totalGoods, totalMoney } from './ledger.js';
 import { dailyDeaths, monthlyDemography, yearlyAging } from './npc.js';
 import { chance65536 } from './prng.js';
+import { updateProgress } from './progress.js';
 import { dailyShipments, weeklyNodeRecovery } from './trade.js';
 import { foundEnterprises, seasonEnterpriseReview, weeklyDiffusion, seasonalServices, snapshotMap, yearlyEducation } from './society.js';
 import type { WorldState } from './types.js';
@@ -157,6 +158,7 @@ export function step(world: WorldState, opts: StepOptions = {}): StepResult {
     compactLedger(w, date.year);
     compactHistory(w, w.tick);
   }
+  updateProgress(w); // 村級目標與階段（ADR-0007，固定在每日末）
   const tick = w.tick;
   w.tick++;
   if (opts.checkInvariants) checkInvariants(w); // 7

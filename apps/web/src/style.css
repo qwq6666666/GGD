@@ -117,3 +117,34 @@ input[type=range] { width: 100%; min-height: 32px; }
 .frow { display: grid; grid-template-columns: 6.5em 1fr 3.5em; align-items: center; gap: 6px; margin: 3px 0; font-size: .92em; }
 .meters { display: grid; grid-template-columns: auto 1fr auto 1fr auto 1fr; align-items: center; gap: 6px; margin: 6px 0; }
 .tabs button { min-width: 52px; font-size: 1.2em; }
+
+.chip.goal { border-color: var(--accent); }
+.stagehead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.stagehead > div { flex: 1; }
+.stagehead .big:first-child { font-size: 2em; }
+.goal { display: grid; grid-template-columns: 2em 1fr auto; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); }
+.goal.ok { border-color: var(--good); }
+.goal .gi { font-size: 1.4em; text-align: center; }
+.goal.ok .gi { color: var(--good); }
+.goal .gn { font-variant-numeric: tabular-nums; color: var(--muted); }
+.btn.ib.locked { opacity: .55; border-style: dashed; }
+.pcount { display: flex; align-items: center; gap: 4px; margin: 2px 0 8px; }
+.pcount i { width: 18px; height: 5px; border-radius: 3px; background: var(--line); }
+.pcount i.on { background: var(--accent); }
+.pcount span { margin-left: 6px; }
+.pstack { position: relative; overflow-x: clip; }
+.pcard { position: relative; touch-action: pan-y; user-select: none; border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--panel2); transition: transform .18s ease-out; }
+.pcard.dr { border-color: var(--good); box-shadow: 0 0 0 2px var(--good) inset; }
+.pcard.dl { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad) inset; }
+.pcard.noperm { opacity: .6; }
+.swipe-tag { position: absolute; top: 10px; padding: 4px 10px; border-radius: 8px; font-weight: 800; opacity: 0; pointer-events: none; transform: rotate(-8deg); }
+.swipe-tag.r { left: 10px; color: #0f2a0b; background: var(--good); }
+.swipe-tag.l { right: 10px; color: #330a0a; background: var(--bad); transform: rotate(8deg); }
+.pcard.dr .swipe-tag.r, .pcard.dl .swipe-tag.l { opacity: 1; }
+.pcard.go { filter: brightness(1.15); }
+.cost { margin: 8px 0; padding: 6px 8px; border-radius: 10px; background: #20281d; }
+.cost.bad { background: #2c2020; }
+.cost h5 { margin: 0 0 2px; font-size: .9em; color: var(--accent); }
+.cost.bad h5 { color: var(--bad); }
+.cost .row { margin: 3px 0; }
+.swipehint { text-align: center; color: var(--muted); font-size: .8em; margin-top: 4px; }

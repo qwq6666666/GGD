@@ -88,7 +88,7 @@ export class Store {
     const lastId = prev.events.length ? prev.events[prev.events.length - 1]!.id : 0;
     for (const e of cur.events) {
       if (e.id <= lastId) continue;
-      if (e.importance >= 2) this.toasts.push({ text: e.summary, kind: e.importance >= 3 ? 'warn' : 'info', at: Date.now() });
+      if (e.importance >= 2) this.toasts.push({ text: e.summary, kind: e.type === 'GoalDone' || e.type === 'StageUp' ? 'good' : e.importance >= 3 ? 'warn' : 'info', at: Date.now() });
     }
     if (this.toasts.length > 4) this.toasts.splice(0, this.toasts.length - 4);
   }

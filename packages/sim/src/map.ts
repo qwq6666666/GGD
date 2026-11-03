@@ -9,7 +9,7 @@ export const ZONE_MAX = ZONE_MIN + M.initialBuildable;
 
 export const tileIdx = (m: MapState, x: number, y: number): number => y * m.w + x;
 export const inBounds = (m: MapState, x: number, y: number): boolean => x >= 0 && y >= 0 && x < m.w && y < m.h;
-export const inBuildZone = (x: number, y: number): boolean => x >= ZONE_MIN && x < ZONE_MAX && y >= ZONE_MIN && y < ZONE_MAX;
+export const inBuildZone = (m: Pick<MapState, 'zmin' | 'zmax'>, x: number, y: number): boolean => x >= m.zmin && x < m.zmax && y >= m.zmin && y < m.zmax;
 
 function blur(src: number[], w: number, h: number): number[] {
   const out = new Array<number>(w * h).fill(0);
@@ -90,12 +90,12 @@ export function generateMap(prng: PrngState): MapState {
       forest[i] = 0;
     }
   }
-  return { w, h, height, soil, forest, water, stone, road: new Array<number>(n).fill(0), occ: new Array<number>(n).fill(0) };
+  return { w, h, height, soil, forest, water, stone, road: new Array<number>(n).fill(0), occ: new Array<number>(n).fill(0), zmin: ZONE_MIN, zmax: ZONE_MAX };
 }
 
 /** 此格是否可放置建築佔地（不含出入口檢查）。 */
 export function tileBuildable(m: MapState, x: number, y: number): boolean {
-  if (!inBounds(m, x, y) || !inBuildZone(x, y)) return false;
+  if (!inBounds(m, x, y) || !inBuildZone(m, x, y)) return false;
   const i = tileIdx(m, x, y);
   return m.water[i] === 0 && m.stone[i] === 0 && m.height[i]! <= 1 && m.forest[i] === 0 && m.occ[i] === 0 && m.road[i] === 0;
 }

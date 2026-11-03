@@ -1,5 +1,5 @@
 import type { CommandResult } from '@ss/schema';
-import type { Building, Enterprise, Household, Leadership, Policies, Proposal, PublicWork, SimEvent, SupportRecord, Tombstone, TradeNode, Shipment, Zone } from '@ss/sim';
+import type { GoalStatus, Building, Enterprise, Household, Leadership, Policies, Proposal, PublicWork, SimEvent, SupportRecord, Tombstone, TradeNode, Shipment, Zone } from '@ss/sim';
 
 export type Speed = 'pause' | 'normal' | 'fast' | 'max';
 
@@ -21,6 +21,8 @@ export interface MapData {
   stone: number[];
   road: number[];
   occ: number[];
+  zmin: number;
+  zmax: number;
 }
 
 export interface NpcView {
@@ -82,6 +84,7 @@ export interface Snapshot {
   effects: { type: string; untilTick: number; value: number }[];
   mapSnaps: { tick: number; grid: number[] }[];
   mapKey: string;
+  progress: { stage: number; max: number; name: string; icon: string; goals: GoalStatus[]; needed: number };
 }
 
 /** Worker → 主執行緒。渲染層只讀取快照，不得改寫模擬狀態（GDD 11.2）。 */

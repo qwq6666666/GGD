@@ -5,6 +5,7 @@ import {
 } from './civic.js';
 import { PUBLIC_SECTOR, bumpMapVersion, cancelWork, materialsValue, queueWork, reserveMaterials } from './econ.js';
 import { pushEvent } from './history.js';
+import { unlocked } from './progress.js';
 import { inBuildZone, tileIdx, validatePlacement, inBounds } from './map.js';
 import { addBuilding } from './start.js';
 import { transferMoney } from './ledger.js';
@@ -39,6 +40,7 @@ export function applyCommand(w: WorldState, cmd: Command): CommandResult {
       const raw = p.tiles;
       const mode = (['dirt', 'stone', 'bridge', 'stonebridge'].includes(String(p.mode)) ? p.mode : 'dirt') as RoadMode;
       if (!Array.isArray(raw) || raw.length === 0 || raw.length > 60) return reject(cmd, 'invalid_target');
+      if ((mode === 'stone' || mode === 'stonebridge') && !unlocked(w, mode)) return reject(cmd, 'locked');
       const target = mode === 'dirt' ? 1 : mode === 'stone' ? 2 : mode === 'bridge' ? 3 : 4;
       const tiles: { x: number; y: number; type: number }[] = [];
       for (const t of raw as Record<string, unknown>[]) {
@@ -50,7 +52,7 @@ export function applyCommand(w: WorldState, cmd: Command): CommandResult {
         const onWater = w.map.water[i] !== 0;
         if (w.map.occ[i] !== 0 || w.map.stone[i] !== 0) return reject(cmd, 'invalid_target');
         const ok =
-          mode === 'dirt' ? inBuildZone(x, y) && !onWater && have === 0 : mode === 'stone' ? have === 1 : mode === 'bridge' ? onWater && have === 0 && x >= 8 : have === 3;
+          mode === 'dirt' ? inBuildZone(w.map, x, y) && !onWater && have === 0 : mode === 'stone' ? have === 1 : mode === 'bridge' ? onWater && have === 0 && x >= 8 : have === 3;
         if (!ok) return reject(cmd, 'invalid_target');
         if (!tiles.some((q) => q.x === x && q.y === y)) tiles.push({ x, y, type: target });
       }
@@ -82,6 +84,7 @@ export function applyCommand(w: WorldState, cmd: Command): CommandResult {
       const x = num(p, 'x');
       const y = num(p, 'y');
       if (!PUBLIC_BUILDINGS.includes(type) || x === undefined || y === undefined) return reject(cmd, 'invalid_target');
+      if (!unlocked(w, type)) return reject(cmd, 'locked');
       const err = validatePlacement(w.map, w.buildings, type, x, y);
       if (err) return reject(cmd, 'invalid_target:' + err);
       const cfg = (ECON.build as Record<string, { wood: number; stone: number; personDays: number }>)[type === 'publichome' ? 'home' : type === 'school' || type === 'clinic' ? 'storage' : type]!;
@@ -102,13 +105,14 @@ export function applyCommand(w: WorldState, cmd: Command): CommandResult {
       if (perm) return reject(cmd, perm);
       const x = num(p, 'x'), y = num(p, 'y'), zw = num(p, 'w'), zh = num(p, 'h'), kind = num(p, 'kind');
       if (x === undefined || y === undefined || zw === undefined || zh === undefined || kind === undefined || zw < 1 || zh < 1 || zw > 24 || zh > 24 || ![0, 1, 2].includes(kind)) return reject(cmd, 'invalid_target');
+      if (kind === 1 && !unlocked(w, 'zone1')) return reject(cmd, 'locked');
       if (!inBounds(w.map, x, y) || !inBounds(w.map, x + zw - 1, y + zh - 1)) return reject(cmd, 'invalid_target');
       if (kind === 2) {
         // 植林：每格 2 文
         let n = 0;
         for (let yy = y; yy < y + zh; yy++) for (let xx = x; xx < x + zw; xx++) {
           const i = tileIdx(w.map, xx, yy);
-          if (w.map.forest[i] === 0 && w.map.water[i] === 0 && w.map.occ[i] === 0 && w.map.road[i] === 0 && w.map.stone[i] === 0 && !inBuildZone(xx, yy)) n++;
+          if (w.map.forest[i] === 0 && w.map.water[i] === 0 && w.map.occ[i] === 0 && w.map.road[i] === 0 && w.map.stone[i] === 0 && !inBuildZone(w.map, xx, yy)) n++;
         }
         if (n === 0) return reject(cmd, 'nothing_to_build');
         if (w.settlement.public.cash < n * 2) return reject(cmd, 'insufficient_budget');
@@ -121,7 +125,7 @@ export function applyCommand(w: WorldState, cmd: Command): CommandResult {
         w.settlement.public.cash += rest;
         for (let yy = y; yy < y + zh; yy++) for (let xx = x; xx < x + zw; xx++) {
           const i = tileIdx(w.map, xx, yy);
-          if (w.map.forest[i] === 0 && w.map.water[i] === 0 && w.map.occ[i] === 0 && w.map.road[i] === 0 && w.map.stone[i] === 0 && !inBuildZone(xx, yy)) w.map.forest[i] = 60;
+          if (w.map.forest[i] === 0 && w.map.water[i] === 0 && w.map.occ[i] === 0 && w.map.road[i] === 0 && w.map.stone[i] === 0 && !inBuildZone(w.map, xx, yy)) w.map.forest[i] = 60;
         }
         bumpMapVersion(w, x, y);
       } else {

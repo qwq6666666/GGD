@@ -52,9 +52,9 @@ describe('存檔（GDD 12、14 存檔回放）', () => {
   });
 });
 
-import { checksumOf } from '../src/index.js';
+import { checksumOf, CURRENT_SCHEMA_VERSION } from '../src/index.js';
 
-describe('存檔遷移（schema v1 → v2）', () => {
+describe('存檔遷移（schema v1 → 現行版本）', () => {
   const v1 = (tick: number): string => {
     const body = { format: 'shengsheng-save', schemaVersion: 1, simVersion: '0.1.0-a0', worldVersion: 0, seed: 42, tick, state: { id: 'world-42', tick, version: 0, eventLog: [] }, commandLog: [] };
     return JSON.stringify({ ...body, checksum: checksumOf(body) });
@@ -62,7 +62,7 @@ describe('存檔遷移（schema v1 → v2）', () => {
 
   it('A0 骨架存檔可遷移：同 seed 重建、日期相同、檢查碼有效、可繼續模擬', () => {
     const { world, save, warnings } = parseSave(v1(59 + 90));
-    expect(save.schemaVersion).toBe(2);
+    expect(save.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(world.tick).toBe(59 + 90);
     expect(world.seed).toBe(42);
     expect(world.npcs.length).toBeGreaterThan(0);
@@ -85,5 +85,28 @@ describe('存檔遷移（schema v1 → v2）', () => {
     delete body.checksum;
     const text = JSON.stringify({ ...body, checksum: checksumOf(body) });
     expect(parseSave(text).warnings.some((x) => x.includes('規則版本'))).toBe(true);
+  });
+});
+
+describe('存檔遷移（schema v2 → v3：村級階段）', () => {
+  it('v2 存檔補上階段與可建區，不損失既有資料，可繼續模擬', () => {
+    const w = createWorld(7);
+    runDays(w, 40);
+    const cur = JSON.parse(serializeSave(createSave(w, []))) as Record<string, unknown>;
+    const state = JSON.parse(JSON.stringify(cur.state)) as Record<string, unknown>;
+    delete state.progress;
+    const map = state.map as Record<string, unknown>;
+    delete map.zmin;
+    delete map.zmax;
+    const body: Record<string, unknown> = { ...cur, schemaVersion: 2, state };
+    delete body.checksum;
+    const text = JSON.stringify({ ...body, checksum: checksumOf(body) });
+    const { world, save } = parseSave(text);
+    expect(save.schemaVersion).toBe(3);
+    expect(world.progress).toEqual({ stage: 0, done: [] });
+    expect(world.map.zmin).toBe(24);
+    expect(world.map.zmax).toBe(72);
+    expect(world.npcs.length).toBe(w.npcs.length);
+    runDays(world, 30, { checkInvariants: true });
   });
 });

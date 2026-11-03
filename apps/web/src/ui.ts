@@ -1,7 +1,7 @@
-import { ECON } from '@ss/content';
+import { ECON, GOALS } from '@ss/content';
 import { findPath, footprintOf as _fp, validatePlacement, type BuildingType, type MapState } from '@ss/sim';
 import type { Ghost, MapScene } from './game/MapScene.js';
-import { BUILDING_ICON, BUILDING_LABEL, COMMODITIES, COM_ICON, FAMILIES, GROUPS, GROUP_ICON, more, tag, POLICY_LABEL, POLICY_RANGE, PROPOSAL_LABEL, SEASONS, STATE_LABEL, TRAIT_LABEL, esc, reasonText } from './i18n.js';
+import { BUILDING_ICON, BUILDING_LABEL, COMMODITIES, COM_ICON, FAMILIES, GROUPS, GROUP_ICON, more, tag, POLICY_LABEL, POLICY_RANGE, PROPOSAL_ICON, PROPOSAL_LABEL, SEASONS, STATE_LABEL, TRAIT_LABEL, esc, reasonText } from './i18n.js';
 import type { NpcView, Snapshot, Speed } from './protocol.js';
 import type { Store } from './store.js';
 
@@ -46,7 +46,7 @@ const BUILD_WHY: Record<string, { groups: string; short: string; risk: string }>
 
 export class Ui {
   tab: string | null = null;
-  sub: Record<string, string> = { world: 'eco', history: 'events' };
+  sub: Record<string, string> = { world: 'goals', history: 'events' };
   mode: Mode = { kind: 'select' };
   anchor: { x: number; y: number } | null = null;
   rect: { x: number; y: number } | null = null;
@@ -56,6 +56,7 @@ export class Ui {
   priceHist: { week: number; prices: number[] }[] = [];
   settings = { fs: 15, reduce: false };
   private lastSheetKey = '';
+  private dragging = false;
   private tutStep = 0;
   private tutSeen = false;
   private order = { node: 1, item: 0, qty: 50 };
@@ -76,9 +77,14 @@ export class Ui {
     });
     q('#stats').addEventListener('click', (e) => {
       const c = (e.target as HTMLElement).closest('[data-go]') as HTMLElement | null;
-      if (c) this.openTab(c.dataset.go!);
+      if (!c) return;
+      if (c.dataset.go === 'goals') {
+        this.sub.world = 'goals';
+        this.openTab('world');
+      } else this.openTab(c.dataset.go!);
     });
     for (const sel of ['#sheet', '#card', '#modal']) q(sel).addEventListener('click', (e) => this.onClick(e));
+    this.bindSwipe(q('#sheet'));
     q('#sheet').addEventListener('input', (e) => this.onInput(e));
     q('#sheet').addEventListener('change', (e) => this.onInput(e));
     store.subscribe(() => this.onSnapshot());
@@ -92,6 +98,69 @@ export class Ui {
       if (b.dataset.tut === 'skip') this.setTut(99);
       else this.setTut(this.tutStep + 1);
     });
+  }
+
+  /** 提案卡左右滑：右＝核准、左＝拒絕；滑動距離不足則彈回。 */
+  private bindSwipe(sheet: HTMLElement): void {
+    let card: HTMLElement | null = null;
+    let x0 = 0;
+    let y0 = 0;
+    let dx = 0;
+    let moved = false;
+    const TH = 90;
+    sheet.addEventListener('pointerdown', (e) => {
+      const c = (e.target as HTMLElement).closest('.pcard') as HTMLElement | null;
+      if (!c || (e.target as HTMLElement).closest('button,summary,select,input')) return;
+      card = c;
+      x0 = e.clientX;
+      y0 = e.clientY;
+      dx = 0;
+      moved = false;
+    });
+    sheet.addEventListener('pointermove', (e) => {
+      if (!card) return;
+      const mx = e.clientX - x0;
+      const my = e.clientY - y0;
+      if (!moved && Math.abs(mx) < 8) return;
+      if (!moved && Math.abs(my) > Math.abs(mx)) {
+        card = null; // 垂直捲動
+        return;
+      }
+      moved = true;
+      this.dragging = true;
+      dx = mx;
+      card.style.transition = 'none';
+      card.style.transform = `translateX(${dx}px) rotate(${dx / 25}deg)`;
+      card.classList.toggle('dr', dx > 24);
+      card.classList.toggle('dl', dx < -24);
+      card.classList.toggle('go', Math.abs(dx) >= TH);
+      if (card.dataset.perm !== '1') card.classList.add('noperm');
+    });
+    const end = (): void => {
+      const c = card;
+      card = null;
+      if (!c || !moved) {
+        this.dragging = false;
+        return;
+      }
+      const pid = c.dataset.pid;
+      const act = dx >= TH ? 'approve' : dx <= -TH ? 'reject' : '';
+      if (act && c.dataset.perm === '1') {
+        c.style.transition = 'transform .18s ease-out, opacity .18s';
+        c.style.transform = `translateX(${dx > 0 ? 500 : -500}px) rotate(${dx > 0 ? 20 : -20}deg)`;
+        c.style.opacity = '0';
+        this.dragging = false;
+        void this.cmd('RespondProposal', { proposalId: Number(pid), response: act }, act === 'approve' ? '✔ 已核准' : '✖ 已拒絕');
+      } else {
+        c.style.transition = 'transform .18s ease-out';
+        c.style.transform = '';
+        c.classList.remove('dr', 'dl', 'go');
+        this.dragging = false;
+        if (act) this.store.toast('🔒 目前不是領袖', 'warn');
+      }
+    };
+    sheet.addEventListener('pointerup', end);
+    sheet.addEventListener('pointercancel', end);
   }
 
   private setTut(n: number): void {
@@ -112,8 +181,8 @@ export class Ui {
     if (!s || this.tutStep >= 99) return '';
     const open = s.proposals.filter((p) => p.status === 0).length;
     const steps: { when: boolean; text: string }[] = [
-      { when: true, text: '▶ 開始；⏸ 暫停。點人或建築看想法。' },
-      { when: open > 0, text: '📜 有提案了：✔ 核准、⏳ 延後、✖ 拒絕。' },
+      { when: true, text: '▶ 開始；⏸ 暫停。🎯 完成 2 項目標，村子就會成長。' },
+      { when: open > 0, text: '📜 有提案了：右滑核准、左滑拒絕，卡片會列出要花什麼。' },
       { when: s.works.some((w) => w.kind !== 'maintenance') || s.stats.pop > 0 && s.tick > 150, text: '🏗 工程要人手與材料；冬天最好招人。' },
       { when: s.seasonSummary.length >= 1, text: '季末結算 👥 支持度；到 🏠 看原因。' },
       { when: s.tick > 270, text: '🌾 存糧是春荒關鍵；🌍 可調政策、買糧。' },
@@ -168,7 +237,7 @@ export class Ui {
           .filter((t) => {
             const i = idx(t);
             if (map.occ[i] !== 0) return false;
-            if (rm === 'dirt') return map.road[i] === 0 && map.water[i] === 0 && t.x >= 24 && t.x < 72 && t.y >= 24 && t.y < 72;
+            if (rm === 'dirt') return map.road[i] === 0 && map.water[i] === 0 && t.x >= map.zmin && t.x < map.zmax && t.y >= map.zmin && t.y < map.zmax;
             if (rm === 'stone') return map.road[i] === 1;
             if (rm === 'bridge') return map.water[i] !== 0 && map.road[i] === 0;
             return map.road[i] === 3;
@@ -291,7 +360,8 @@ export class Ui {
     (document.querySelector('#stats') as HTMLElement).innerHTML =
       `<span class="chip ${supCls}" data-go="family" aria-label="支持度">👥<b>${sup}</b>${arrow}</span>` +
       `<span class="chip ${foodCls}" data-go="world" aria-label="存糧天數">🌾<b>${food}</b><small>日</small></span>` +
-      `<span class="chip" data-go="world" aria-label="公庫">💰<b>${s.pub.cash}</b></span>`;
+      `<span class="chip" data-go="world" aria-label="公庫">💰<b>${s.pub.cash}</b></span>` +
+      `<span class="chip goal" data-go="goals" aria-label="目標">${s.progress.icon}<b>${s.progress.goals.filter((g) => g.done).length}/${s.progress.needed}</b></span>`;
     const open = s.proposals.filter((p) => p.status === 0).length;
     const badge = document.querySelector('#badge') as HTMLElement;
     badge.hidden = open === 0;
@@ -316,6 +386,7 @@ export class Ui {
     const sig = `${s.proposals.map((p) => `${p.id}.${p.status}`).join(',')}|${s.works.length}|${s.pub.cash}`;
     const key = `${this.tab}|${this.sub[this.tab] ?? ''}|${s.tick}|${sig}|${this.mode.kind}|${this.anchor?.x},${this.anchor?.y}|${this.roadTiles.length}`;
     if (!force && key === this.lastSheetKey) return;
+    if (!force && this.dragging) return; // 滑動提案時不重畫，避免打斷手勢
     // 滑桿或輸入框操作中不重繪，避免打斷
     if (!force && document.activeElement && sheet.contains(document.activeElement) && (document.activeElement as HTMLElement).tagName === 'INPUT') return;
     this.lastSheetKey = key;
@@ -359,7 +430,10 @@ export class Ui {
     if (!perm) h += `<p class="muted">🔒 目前不是領袖</p>`;
     const opt = BUILD_OPTIONS.find((o) => this.isMode(o));
     // 選好類型後收合選單，只留預覽與確認，讓地圖空出來點選位置
-    if (!opt) h += `<div class="grid icons">${BUILD_OPTIONS.map((o) => `<button class="btn ib" data-act="mode:${o.id}" ${perm ? '' : 'disabled'}><span class="ic">${BUILD_ICON[o.id] ?? ''}</span><small>${o.label}</small></button>`).join('')}</div>`;
+    if (!opt) h += `<div class="grid icons">${BUILD_OPTIONS.map((o) => {
+      const lock = this.isLocked(s, o.id);
+      return `<button class="btn ib ${lock ? 'locked' : ''}" data-act="${lock ? 'locked:' + o.id : 'mode:' + o.id}" ${perm ? '' : 'disabled'}><span class="ic">${lock ? '🔒' : BUILD_ICON[o.id] ?? ''}</span><small>${o.label}</small></button>`;
+    }).join('')}</div>`;
     if (opt) {
       h += `<div class="card"><b>${BUILD_ICON[opt.id] ?? ''} ${opt.label}</b>`;
       h += this.buildPreview(s, opt);
@@ -426,21 +500,34 @@ export class Ui {
 
   // 提案 ----------------------------------------------------------
   private proposalPanel(s: Snapshot): string {
-    const open = s.proposals;
-    if (!open.length) return `<p class="muted">📭 沒有提案&emsp;${tag('👥', s.leadership.support)}${tag('🌾', s.stats.foodDays)}</p>`;
+    if (!s.proposals.length) return `<p class="muted">📭 沒有提案&emsp;${tag('👥', s.leadership.support)}${tag('🌾', s.stats.foodDays)}</p>`;
     const perm = s.leadership.playerIsLeader && s.leadership.mode === 0;
-    let h = '';
-    for (const p of open) {
-      const who = s.npcs.find((n) => n.id === p.proposerId);
-      const hh = who ? s.households.find((x) => x.id === who.householdId) : undefined;
-      const mats = p.materials.map((m, i) => (m ? tag(COM_ICON[i]!, m) : '')).join('');
-      const left = Math.max(0, p.expiry - s.tick);
-      const detail = `<div class="kv"><span>提案人</span><span>${esc(who?.name ?? '?')}（${esc(hh?.name ?? '')}）</span><span>證據</span><span>${p.evidence}</span><span>人情</span><span>核准 +8／拒絕 −8 信任</span></div>`;
-      h += `<div class="card"><div class="row"><b>${PROPOSAL_LABEL[p.kind] ?? p.kind}</b>${p.priority ? '<span class="pill">❗</span>' : ''}${p.status === 2 ? '<span class="pill">⏳</span>' : ''}${tag('🪙', p.cost)}${mats}${tag('⌛', left)}${more(detail)}</div>
-      <div class="muted">${esc(p.expectedEffects)}</div>
-      <div class="row act3"><button class="btn primary" aria-label="核准" data-act="prop:${p.id}:approve" ${perm ? '' : 'disabled'}>✔</button><button class="btn" aria-label="延後" data-act="prop:${p.id}:defer" ${perm ? '' : 'disabled'}>⏳</button><button class="btn danger" aria-label="拒絕" data-act="prop:${p.id}:reject" ${perm ? '' : 'disabled'}>✖</button></div></div>`;
-    }
-    return h;
+    // 一次一張：待決優先、高優先在前、快到期的在前；延後過的排最後
+    const list = [...s.proposals].sort((a, b) => (a.status === 2 ? 1 : 0) - (b.status === 2 ? 1 : 0) || b.priority - a.priority || a.expiry - b.expiry);
+    const p = list[0]!;
+    const who = s.npcs.find((n) => n.id === p.proposerId);
+    const hh = who ? s.households.find((x) => x.id === who.householdId) : undefined;
+    const left = Math.max(0, p.expiry - s.tick);
+    const cashAfter = s.pub.cash - p.cost;
+    const cost = tag('🪙', `−${p.cost}`, cashAfter < 0 ? 'bad' : '') + `<span class="muted">公庫 ${s.pub.cash} → <b class="${cashAfter < 0 ? 'down' : ''}">${cashAfter}</b></span>`;
+    let mats = '';
+    p.materials.forEach((m, i) => {
+      if (!m) return;
+      const have = s.pub.stock[i] ?? 0;
+      mats += tag(COM_ICON[i]!, `−${m}`, have < m ? 'bad' : '') + `<span class="muted">庫存 ${have}${have < m ? `，缺 ${m - have}，工程會等材料` : ''}</span>`;
+    });
+    const trust = esc(hh?.name ?? '提案家庭');
+    return `<div class="pcount">${list.map((x, i) => `<i class="${i === 0 ? 'on' : ''}"></i>`).join('')}<span class="muted">${list.length > 1 ? `還有 ${list.length - 1} 件` : '最後一件'}</span></div>
+    <div class="pstack"><div class="pcard" data-pid="${p.id}" data-perm="${perm ? 1 : 0}">
+      <div class="swipe-tag l">✖ 拒絕</div><div class="swipe-tag r">核准 ✔</div>
+      <div class="row"><b class="big">${PROPOSAL_ICON[p.kind] ?? '📜'} ${PROPOSAL_LABEL[p.kind] ?? p.kind}</b>${p.priority ? '<span class="pill">❗ 急</span>' : ''}${p.status === 2 ? '<span class="pill">⏳ 已延後</span>' : ''}${tag('⌛', left + ' 日')}</div>
+      <div class="muted">${who ? esc(who.name) + '：' : ''}${esc(p.expectedEffects)}</div>
+      <div class="cost"><h5>✔ 核准會消耗</h5><div class="row">${cost}</div>${mats ? `<div class="row">${mats}</div>` : ''}<div class="row"><span class="muted">另需村民人手施工，${trust} 信任 +8</span></div></div>
+      <div class="cost bad"><h5>✖ 拒絕的代價</h5><div class="row"><span class="muted">${trust} 信任 −8；不花公庫</span></div></div>
+      <div class="swipehint">◀ 左滑拒絕&emsp;右滑核准 ▶</div>
+    </div>
+    <div class="row act3"><button class="btn danger" aria-label="拒絕" data-act="prop:${p.id}:reject" ${perm ? '' : 'disabled'}>✖</button><button class="btn" aria-label="延後（信任 −2）" data-act="prop:${p.id}:defer" ${perm ? '' : 'disabled'}>⏳</button><button class="btn primary" aria-label="核准" data-act="prop:${p.id}:approve" ${perm ? '' : 'disabled'}>✔</button></div>
+    ${more(`<div class="kv"><span>證據</span><span>${p.evidence}</span><span>延後</span><span>${trust} 信任 −2，期限不變</span></div>`)}</div>`;
   }
 
   // 家族 ----------------------------------------------------------
@@ -501,13 +588,40 @@ export class Ui {
 
   // 世界 ----------------------------------------------------------
   private worldPanel(s: Snapshot): string {
-    const tabs = this.tabs('world', [['eco', '📊'], ['policy', '📜'], ['trade', '🚚'], ['sys', '⚙']]);
+    const tabs = this.tabs('world', [['goals', '🎯'], ['eco', '📊'], ['policy', '📜'], ['trade', '🚚'], ['sys', '⚙']]);
     switch (this.sub.world) {
+      case 'goals': return `${tabs}${this.goalsBody(s)}`;
       case 'policy': return `${tabs}${this.policyBody(s)}`;
       case 'trade': return `${tabs}${this.tradeBody(s)}`;
       case 'sys': return `${tabs}${this.systemBody()}`;
       default: return `${tabs}${this.ecoBody(s)}`;
     }
+  }
+
+  private goalsBody(s: Snapshot): string {
+    const P = s.progress;
+    const done = P.goals.filter((g) => g.done).length;
+    let h = `<div class="stagehead"><span class="big">${P.icon}</span><div><b class="big">${P.name}</b><div class="muted">${P.stage >= P.max ? '已成為繁榮之鎮' : `完成任意 ${P.needed} 項，成長為${GOALS.stages[P.stage + 1]?.name ?? '繁榮之鎮'}`}</div></div><b class="big">${Math.min(done, P.needed)}/${P.needed}</b></div>`;
+    for (const g of P.goals) {
+      const pct = Math.floor((g.cur * 100) / Math.max(1, g.target));
+      h += `<div class="goal ${g.done ? 'ok' : ''}"><span class="gi">${g.done ? '✔' : g.icon}</span><div class="gt"><div>${g.text}</div><div class="bar"><i style="width:${g.done ? 100 : pct}%"></i></div></div>${g.target > 1 ? `<span class="gn">${g.cur}/${g.target}</span>` : ''}</div>`;
+    }
+    if (P.stage < P.max) {
+      const nextStage = P.stage + 1;
+      const locks = Object.entries(GOALS.locks as Record<string, number>).filter(([, need]) => need === nextStage).map(([k]) => this.lockLabel(k));
+      const zone = GOALS.stages[P.stage + 1]?.zone ?? GOALS.stages[P.max - 1]!.zone + 12;
+      h += `<div class="row">${tag('🗺', `${zone}×${zone}`)}${locks.map((l) => tag('🔓', l)).join('')}</div>`;
+    }
+    return h;
+  }
+
+  private lockLabel(key: string): string {
+    return BUILD_OPTIONS.find((o) => o.id === key)?.label ?? BUILDING_LABEL[key] ?? key;
+  }
+
+  private isLocked(s: Snapshot, id: string): boolean {
+    const need = (GOALS.locks as Record<string, number>)[id];
+    return need !== undefined && s.progress.stage < need;
   }
 
   private ecoBody(s: Snapshot): string {
@@ -715,6 +829,7 @@ export class Ui {
         this.renderSheet(true);
         break;
       }
+      case 'locked': this.store.toast(`🔒 ${this.lockLabel(p1!)}：村子成長後解鎖（🎯）`, 'warn'); break;
       case 'do': void this.doBuild(p1!); break;
       case 'cancel': void this.cmd('CancelWork', { workId: Number(p1) }, '↩ 已撤銷'); break;
       case 'prop': void this.cmd('RespondProposal', { proposalId: Number(p1), response: p2 }, p2 === 'approve' ? '✔ 已核准' : p2 === 'defer' ? '⏳ 已延後' : '✖ 已拒絕'); break;

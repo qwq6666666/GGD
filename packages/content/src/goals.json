@@ -1,0 +1,38 @@
+{
+  "needed": 2,
+  "stages": [
+    {
+      "name": "營地", "icon": "⛺", "zone": 48,
+      "goals": [
+        { "id": "s0-field", "icon": "🌾", "text": "開墾新農田", "kind": "building", "type": "field", "n": 4 },
+        { "id": "s0-road", "icon": "🟫", "text": "鋪出道路", "kind": "road", "min": 1, "n": 20 },
+        { "id": "s0-spring", "icon": "🌱", "text": "撐過第一個春荒", "kind": "surviveTo", "tick": 450, "foodDays": 15 }
+      ]
+    },
+    {
+      "name": "村", "icon": "🏘", "zone": 56,
+      "goals": [
+        { "id": "s1-school", "icon": "🏫", "text": "建起學堂", "kind": "building", "type": "school", "n": 1 },
+        { "id": "s1-pop", "icon": "🧑", "text": "人口達 32", "kind": "pop", "n": 32 },
+        { "id": "s1-stable", "icon": "👥", "text": "支持度 65 且存糧 30 日", "kind": "stable", "support": 65, "foodDays": 30 }
+      ]
+    },
+    {
+      "name": "大村", "icon": "🏡", "zone": 68,
+      "goals": [
+        { "id": "s2-pop", "icon": "🧑", "text": "人口達 45", "kind": "pop", "n": 45 },
+        { "id": "s2-stone", "icon": "🪨", "text": "鋪 15 格石路", "kind": "road", "min": 2, "n": 15 },
+        { "id": "s2-home", "icon": "🏘", "text": "蓋 2 間公共住宅", "kind": "building", "type": "publichome", "n": 2 }
+      ]
+    },
+    {
+      "name": "鎮", "icon": "🏛", "zone": 84,
+      "goals": [
+        { "id": "s3-pop", "icon": "🧑", "text": "人口達 70", "kind": "pop", "n": 70 },
+        { "id": "s3-years", "icon": "📅", "text": "撐到第 20 年，支持度 50", "kind": "years", "n": 20, "support": 50 },
+        { "id": "s3-ent", "icon": "🏭", "text": "企業達 12 家", "kind": "enterprises", "n": 12 }
+      ]
+    }
+  ],
+  "locks": { "school": 1, "clinic": 1, "zone1": 1, "stone": 2, "stonebridge": 2 }
+}

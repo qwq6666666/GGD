@@ -254,6 +254,7 @@ export function createWorld(seed: number, family = 0): WorldState {
     seasonSummary: [],
     mapSnaps: [],
     lastEpidemicTick: -1000,
+    progress: { stage: 0, done: [] },
   };
 
   // 建築（公共與各戶）

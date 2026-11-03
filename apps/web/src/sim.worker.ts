@@ -37,7 +37,7 @@ function pushView(): void {
   if (snap.mapKey !== lastMapKey) {
     lastMapKey = snap.mapKey;
     const m = world.map;
-    post({ kind: 'map', key: snap.mapKey, map: { w: m.w, h: m.h, height: m.height, soil: m.soil, forest: m.forest, water: m.water, stone: m.stone, road: m.road, occ: m.occ } });
+    post({ kind: 'map', key: snap.mapKey, map: { w: m.w, h: m.h, height: m.height, soil: m.soil, forest: m.forest, water: m.water, stone: m.stone, road: m.road, occ: m.occ, zmin: m.zmin, zmax: m.zmax } });
   }
   post({ kind: 'snapshot', snap, speed });
 }

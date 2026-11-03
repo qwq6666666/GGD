@@ -2,7 +2,7 @@ import { createWorld, runDays } from '@ss/sim';
 import { SaveError } from './errors.js';
 
 /** 目前存檔 schema 版本。每新增一版都必須附遷移函式與測試（GDD 12.1）。 */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 type Raw = Record<string, unknown>;
 
@@ -18,6 +18,13 @@ const MIGRATIONS: Record<number, (save: Raw) => Raw> = {
     const w = createWorld(seed, 0);
     if (tick > w.tick) runDays(w, tick - w.tick);
     return { ...save, schemaVersion: 2, worldVersion: w.version, tick: w.tick, state: w, commandLog: [], migratedFrom: 1 };
+  },
+  /** v2 → v3：補上村級階段（從營地起算，可建區維持原本 48 格）與地圖可建區欄位。不損失任何既有資料。 */
+  2: (save) => {
+    const state = (typeof save.state === 'object' && save.state !== null ? save.state : {}) as Raw;
+    const map = (typeof state.map === 'object' && state.map !== null ? state.map : {}) as Raw;
+    const next: Raw = { ...state, progress: state.progress ?? { stage: 0, done: [] }, map: { ...map, zmin: map.zmin ?? 24, zmax: map.zmax ?? 72 } };
+    return { ...save, schemaVersion: 3, state: next };
   },
 };
 

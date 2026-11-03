@@ -406,6 +406,20 @@ export class MapScene extends Phaser.Scene {
     const g = this.overlay;
     g.clear();
     const s = this.snap;
+    const m = this.map;
+    if (m) {
+      // 可建區以外壓暗，邊界畫線：看得到村子能長到哪
+      const a = m.zmin * T;
+      const b = m.zmax * T;
+      const full = m.w * T;
+      g.fillStyle(0x000000, 0.16);
+      g.fillRect(0, 0, full, a);
+      g.fillRect(0, b, full, full - b);
+      g.fillRect(0, a, a, b - a);
+      g.fillRect(b, a, full - b, b - a);
+      g.lineStyle(2, 0xffe08a, 0.55);
+      g.strokeRect(a, a, b - a, b - a);
+    }
     if (s) {
       for (const z of s.zones) {
         g.fillStyle(z.kind === 0 ? 0x2e7d32 : 0xfbc02d, 0.18);

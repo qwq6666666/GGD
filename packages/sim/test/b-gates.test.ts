@@ -34,6 +34,7 @@ describe('B1：企業、歷史與傳承', () => {
 
   it('商業用地：條件符合的家庭開設企業並記入沿革', () => {
     const w = createWorld(11);
+    w.progress.stage = 1; // 前置條件：商業用地在「村」階段解鎖
     submitCommand(w, cmd(w, 'ZoneLand', { x: 30, y: 30, w: 8, h: 6, kind: 1 }));
     step(w);
     w.households[0]!.cash += 5000;
@@ -102,6 +103,7 @@ describe('B2：升級、學堂診所、貿易', () => {
 
   it('石路升級：道路成本降低；橋梁只能建在水上', () => {
     const w = createWorld(11);
+    w.progress.stage = 2; // 前置條件：石路在「大村」階段解鎖
     const home = w.buildings.find((b) => b.type === 'home')!;
     const tile = { x: home.ex, y: home.ey + 1 };
     const i = tileIdx(w.map, tile.x, tile.y);

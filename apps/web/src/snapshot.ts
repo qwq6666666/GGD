@@ -1,4 +1,5 @@
-import { formatDate, householdStats, toDate, type WorldState } from '@ss/sim';
+import { goalStatus, MAX_STAGE, stageName, formatDate, householdStats, toDate, type WorldState } from '@ss/sim';
+import { GOALS } from '@ss/content';
 import type { NpcView, Snapshot } from './protocol.js';
 
 export function buildSnapshot(w: WorldState): Snapshot {
@@ -42,5 +43,6 @@ export function buildSnapshot(w: WorldState): Snapshot {
     effects: w.env.effects,
     mapSnaps: w.mapSnaps,
     mapKey: `${w.roadVersion}:${Math.floor(w.tick / 90)}`,
+    progress: { stage: w.progress.stage, max: MAX_STAGE, name: stageName(w.progress.stage), icon: GOALS.stages[w.progress.stage]?.icon ?? '🏛', goals: goalStatus(w), needed: GOALS.needed },
   };
 }

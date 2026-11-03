@@ -25,6 +25,7 @@ export const REASON: Record<string, string> = {
   late_command: '命令過期',
   not_implemented: '尚未開放',
   invalid_target: '目標無效',
+  locked: '🔒 村子成長後才解鎖',
   insufficient_budget: '公共資金不足',
   insufficient_funds: '家庭資金不足',
   no_permission: '目前不是領袖，沒有這項權限',
@@ -72,6 +73,7 @@ export const POLICY_RANGE: Record<string, [number, number, number]> = {
   healthBudget: [0, 200, 10],
 };
 
+export const PROPOSAL_ICON: Record<string, string> = { road: '🟫', food_crisis: '🍞', housing: '🏠', tools: '🔧', clinic: '⚕' };
 export const PROPOSAL_LABEL: Record<string, string> = { road: '修路', food_crisis: '糧食告急', housing: '住房不足', tools: '工具短缺', clinic: '診療不足' };
 
 export function esc(s: unknown): string {
